@@ -1,5 +1,6 @@
-package com.nlu.convertapp;
+package com.nlu.convertapp.activities;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.widget.Button;
 
@@ -8,6 +9,9 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+
+import com.google.android.material.button.MaterialButton;
+import com.nlu.convertapp.R;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -24,15 +28,16 @@ public class MainActivity extends AppCompatActivity {
 
 
         // Khai báo các nút
-        Button textToSpeechButton = findViewById(R.id.textToSpeechButton);
-        Button speechToTextButton = findViewById(R.id.speechToTextButton);
-        Button textStorageButton = findViewById(R.id.textStorageButton);
-        Button readBankTransactionButton = findViewById(R.id.readBankTransactionButton);
-        Button phoneCallButton = findViewById(R.id.phoneCallButton);
+        MaterialButton textToSpeechButton = findViewById(R.id.textToSpeechButton);
+        MaterialButton speechToTextButton = findViewById(R.id.speechToTextButton);
+        MaterialButton textStorageButton = findViewById(R.id.textStorageButton);
+        MaterialButton readBankTransactionButton = findViewById(R.id.readBankTransactionButton);
+        MaterialButton phoneCallButton = findViewById(R.id.phoneCallButton);
 
         // Sự kiện onClick cho từng nút
         textToSpeechButton.setOnClickListener(v -> {
-            // TODO: Tích hợp API Text to Speech tại đây
+            Intent intent = new Intent(MainActivity.this, TextToSpeechActivity.class);
+            startActivity(intent);
         });
 
         speechToTextButton.setOnClickListener(v -> {
