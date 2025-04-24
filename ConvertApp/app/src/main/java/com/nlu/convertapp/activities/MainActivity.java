@@ -3,6 +3,7 @@ package com.nlu.convertapp.activities;
 import android.content.Intent;
 import android.os.Bundle;
 import android.widget.Button;
+import android.view.View;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
@@ -41,7 +42,8 @@ public class MainActivity extends AppCompatActivity {
         });
 
         speechToTextButton.setOnClickListener(v -> {
-            // TODO: Tích hợp API Speech to Text tại đây
+            Intent intent = new Intent(MainActivity.this, SpeechToTextActivity.class);
+            startActivity(intent);
         });
 
         textStorageButton.setOnClickListener(v -> {

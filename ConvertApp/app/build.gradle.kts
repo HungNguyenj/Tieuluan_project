@@ -14,6 +14,7 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        vectorDrawables.useSupportLibrary = true
     }
 
     buildTypes {
@@ -32,7 +33,8 @@ android {
 }
 
 dependencies {
-    implementation("com.google.android.material:material:1.11.0")
+    implementation("com.google.android.material:material:1.12.0")
+    implementation("com.joanzapata.iconify:android-iconify-fontawesome:2.2.2")
     implementation(libs.appcompat)
     implementation(libs.material)
     implementation(libs.activity)

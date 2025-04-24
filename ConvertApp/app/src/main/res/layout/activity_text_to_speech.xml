@@ -76,7 +76,7 @@
                 android:layout_height="48dp"
                 android:layout_marginStart="8dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                app:srcCompat="@drawable/ic_baseline_content_copy_24"
+                app:srcCompat="@drawable/ic_copy"
                 android:contentDescription="copy"/>
 
             <ImageButton
@@ -85,7 +85,7 @@
                 android:layout_height="48dp"
                 android:layout_marginStart="8dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                app:srcCompat="@drawable/ic_baseline_star_24"
+                app:srcCompat="@drawable/ic_baseline_star_regular"
                 android:contentDescription="favorite"/>
         </LinearLayout>
 
@@ -132,7 +132,7 @@
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="Play/Pause"
                 android:tint="#0B0B0B"
-                app:srcCompat="@android:drawable/ic_media_play" />
+                app:srcCompat="@drawable/ic_play" />
 
             <TextView
                 android:id="@+id/currentTime"
