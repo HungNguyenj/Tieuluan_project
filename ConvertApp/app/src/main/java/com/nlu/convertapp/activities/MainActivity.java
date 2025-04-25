@@ -47,7 +47,8 @@ public class MainActivity extends AppCompatActivity {
         });
 
         textStorageButton.setOnClickListener(v -> {
-            // TODO: Xử lý lưu trữ văn bản tại đây
+            Intent intent = new Intent(MainActivity.this, TextStorageActivity.class);
+            startActivity(intent);
         });
 
         readBankTransactionButton.setOnClickListener(v -> {
