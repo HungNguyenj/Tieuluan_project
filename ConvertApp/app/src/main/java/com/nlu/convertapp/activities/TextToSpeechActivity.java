@@ -281,6 +281,9 @@ public class TextToSpeechActivity extends AppCompatActivity {
                 playPauseButton.setImageResource(android.R.drawable.ic_media_play);
                 audioSeekBar.setProgress(0);
                 currentTime.setText("00:00");
+                // Reset the player so it can be played again
+                mediaPlayer.seekTo(0);
+                mediaPlayer.pause();
             });
             
         } catch (IOException e) {
@@ -296,7 +299,7 @@ public class TextToSpeechActivity extends AppCompatActivity {
                 int currentPosition = mediaPlayer.getCurrentPosition();
                 audioSeekBar.setProgress(currentPosition);
                 currentTime.setText(formatTime(currentPosition));
-                audioSeekBar.postDelayed(this, 1000);
+                audioSeekBar.postDelayed(this, 100);
             }
         }
     };
@@ -310,6 +313,10 @@ public class TextToSpeechActivity extends AppCompatActivity {
             mediaPlayer.pause();
             playPauseButton.setImageResource(android.R.drawable.ic_media_play);
         } else {
+            // Ensure we can play from any state
+            if (mediaPlayer.getCurrentPosition() >= mediaPlayer.getDuration()) {
+                mediaPlayer.seekTo(0);
+            }
             mediaPlayer.start();
             playPauseButton.setImageResource(android.R.drawable.ic_media_pause);
             updateProgressRunnable.run();
