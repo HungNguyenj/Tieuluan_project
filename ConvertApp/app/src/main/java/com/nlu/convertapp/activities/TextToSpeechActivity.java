@@ -3,6 +3,7 @@ package com.nlu.convertapp.activities;
 import android.media.MediaPlayer;
 import android.os.Bundle;
 import android.view.View;
+import android.widget.AdapterView;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.SeekBar;
@@ -22,7 +23,9 @@ import com.google.android.material.button.MaterialButton;
 import com.google.gson.Gson;
 import com.nlu.convertapp.R;
 import com.nlu.convertapp.api.ElevenLabsApi;
+import com.nlu.convertapp.api.ViettelAiApi;
 import com.nlu.convertapp.models.TextToSpeechRequest;
+import com.nlu.convertapp.models.ViettelTtsRequest;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -42,11 +45,25 @@ import retrofit2.converter.gson.GsonConverterFactory;
 
 public class TextToSpeechActivity extends AppCompatActivity {
 
-    private static final String API_KEY = "sk_2bb0829640a3f35d2a97f863e7b5534fa1a13b1dd9039ebf"; // Replace with your actual API key
-    private static final String BASE_URL = "https://api.elevenlabs.io/";
-    private static final String VOICE_ID = "JBFqnCBsd6RMkjVDRZzb";
-    private static final String OUTPUT_FORMAT = "mp3_44100_128";
-    private static final String MODEL_ID = "eleven_multilingual_v2";
+    // ElevenLabs API constants
+    private static final String ELEVENLABS_API_KEY = "sk_2bb0829640a3f35d2a97f863e7b5534fa1a13b1dd9039ebf";
+    private static final String ELEVENLABS_BASE_URL = "https://api.elevenlabs.io/";
+    private static final String ELEVENLABS_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb";
+    private static final String ELEVENLABS_OUTPUT_FORMAT = "mp3_44100_128";
+    private static final String ELEVENLABS_MODEL_ID = "eleven_multilingual_v2";
+
+    // Viettel AI TTS constants
+    private static final String VIETTEL_BASE_URL = "https://viettelai.vn/";
+    private static final String VIETTEL_TOKEN = "b78353060e4fc496c6641960b931f37d"; // Replace with your actual token
+    private static final String VIETTEL_VOICE = "hcm-diemmy";
+    private static final float VIETTEL_SPEED = 1.0f;
+    private static final int VIETTEL_RETURN_OPTION = 3;
+    private static final boolean VIETTEL_WITHOUT_FILTER = false;
+
+    // Language constants
+    private static final int LANGUAGE_ENGLISH = 0;
+    private static final int LANGUAGE_VIETNAMESE = 1;
+    private int currentLanguage = LANGUAGE_ENGLISH;
 
     Toolbar toolbar;
     private Spinner languageSpinner;
@@ -68,6 +85,7 @@ public class TextToSpeechActivity extends AppCompatActivity {
     private File audioFile;
     private boolean isPlaying = false;
     private ElevenLabsApi elevenLabsApi;
+    private ViettelAiApi viettelAiApi;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -93,6 +111,19 @@ public class TextToSpeechActivity extends AppCompatActivity {
             }
         });
 
+        // Setup language spinner listener
+        languageSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                currentLanguage = position;
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+                currentLanguage = LANGUAGE_ENGLISH;
+            }
+        });
+
         // Xử lý sự kiện cho các nút
         setupButtonListeners();
 
@@ -107,13 +138,23 @@ public class TextToSpeechActivity extends AppCompatActivity {
                 .writeTimeout(60, TimeUnit.SECONDS)
                 .build();
 
-        Retrofit retrofit = new Retrofit.Builder()
-                .baseUrl(BASE_URL)
+        // Setup ElevenLabs API
+        Retrofit elevenLabsRetrofit = new Retrofit.Builder()
+                .baseUrl(ELEVENLABS_BASE_URL)
                 .client(client)
                 .addConverterFactory(GsonConverterFactory.create())
                 .build();
 
-        elevenLabsApi = retrofit.create(ElevenLabsApi.class);
+        elevenLabsApi = elevenLabsRetrofit.create(ElevenLabsApi.class);
+
+        // Setup Viettel AI API
+        Retrofit viettelRetrofit = new Retrofit.Builder()
+                .baseUrl(VIETTEL_BASE_URL)
+                .client(client)
+                .addConverterFactory(GsonConverterFactory.create())
+                .build();
+
+        viettelAiApi = viettelRetrofit.create(ViettelAiApi.class);
     }
 
     private void initializeViews() {
@@ -191,18 +232,76 @@ public class TextToSpeechActivity extends AppCompatActivity {
         // Show loading message
         Toast.makeText(this, "Converting text to speech...", Toast.LENGTH_SHORT).show();
         
+        // Choose TTS service based on selected language
+        if (currentLanguage == LANGUAGE_ENGLISH) {
+            // Use ElevenLabs for English
+            convertWithElevenLabs(text);
+        } else {
+            // Use Viettel AI for Vietnamese
+            convertWithViettelAi(text);
+        }
+    }
+    
+    private void convertWithElevenLabs(String text) {
         // Create request body
-        TextToSpeechRequest requestData = new TextToSpeechRequest(text, MODEL_ID);
+        TextToSpeechRequest requestData = new TextToSpeechRequest(text, ELEVENLABS_MODEL_ID);
         String jsonBody = new Gson().toJson(requestData);
         RequestBody requestBody = RequestBody.create(
                 MediaType.parse("application/json"), jsonBody);
 
         // Make API call
         Call<ResponseBody> call = elevenLabsApi.convertTextToSpeech(
-                VOICE_ID, 
-                OUTPUT_FORMAT, 
-                API_KEY, 
+                ELEVENLABS_VOICE_ID, 
+                ELEVENLABS_OUTPUT_FORMAT, 
+                ELEVENLABS_API_KEY, 
                 requestBody);
+
+        call.enqueue(new Callback<ResponseBody>() {
+            @Override
+            public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    try {
+                        // Save audio to a temporary file
+                        saveAndPlayAudio(response.body().byteStream());
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                        Toast.makeText(TextToSpeechActivity.this, 
+                                "Error saving audio: " + e.getMessage(), 
+                                Toast.LENGTH_SHORT).show();
+                    }
+                } else {
+                    Toast.makeText(TextToSpeechActivity.this, 
+                            "Error: " + response.code() + " " + response.message(), 
+                            Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<ResponseBody> call, Throwable t) {
+                Toast.makeText(TextToSpeechActivity.this, 
+                        "Network error: " + t.getMessage(), 
+                        Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+    
+    private void convertWithViettelAi(String text) {
+        // Create Viettel AI request body
+        ViettelTtsRequest requestData = new ViettelTtsRequest(
+                text, 
+                VIETTEL_VOICE,
+                VIETTEL_SPEED,
+                VIETTEL_RETURN_OPTION,
+                VIETTEL_TOKEN,
+                VIETTEL_WITHOUT_FILTER
+        );
+        
+        String jsonBody = new Gson().toJson(requestData);
+        RequestBody requestBody = RequestBody.create(
+                MediaType.parse("application/json"), jsonBody);
+
+        // Make API call
+        Call<ResponseBody> call = viettelAiApi.convertTextToSpeech(requestBody);
 
         call.enqueue(new Callback<ResponseBody>() {
             @Override
