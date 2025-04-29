@@ -1,16 +1,50 @@
 package com.nlu.convertapp.activities;
 
+import android.app.Activity;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
+import android.content.Intent;
+import android.database.Cursor;
+import android.net.Uri;
 import android.os.Bundle;
+import android.provider.OpenableColumns;
 import android.view.View;
 import android.widget.ImageButton;
 import android.widget.Spinner;
 import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.widget.Toolbar;
 import androidx.appcompat.app.AppCompatActivity;
+
 import com.google.android.material.button.MaterialButton;
 import com.nlu.convertapp.R;
+import com.nlu.convertapp.api.ElevenLabsApi;
+import com.nlu.convertapp.models.SpeechToTextResponse;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+
+import okhttp3.MediaType;
+import okhttp3.MultipartBody;
+import okhttp3.OkHttpClient;
+import okhttp3.RequestBody;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+import retrofit2.Retrofit;
+import retrofit2.converter.gson.GsonConverterFactory;
 
 public class SpeechToTextActivity extends AppCompatActivity {
+
+    private static final String ELEVENLABS_API_URL = "https://api.elevenlabs.io/";
+    private static final String API_KEY = "sk_2bb0829640a3f35d2a97f863e7b5534fa1a13b1dd9039ebf";
+    private static final String MODEL_ID = "scribe_v1";
 
     private Toolbar toolbar;
     private Spinner languageSpinner;
@@ -20,6 +54,35 @@ public class SpeechToTextActivity extends AppCompatActivity {
     private TextView recognizedText;
     private ImageButton copyButton;
     private ImageButton starButton;
+    
+    private Uri selectedAudioFileUri;
+    private ElevenLabsApi elevenLabsApi;
+
+    //Add file from phone
+    private final ActivityResultLauncher<Intent> filePickerLauncher = 
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
+                    Uri uri = result.getData().getData();
+                    if (uri != null) {
+                        try {
+                            selectedAudioFileUri = uri;
+                            String fileName = getFileName(uri);
+                            // Change the button text to show the selected filename
+                            addFileButton.setText(fileName);
+                            addFileButton.setIcon(getResources().getDrawable(R.drawable.ic_baseline_file_upload_24, getTheme()));
+                            Toast.makeText(this, "File added successfully", Toast.LENGTH_SHORT).show();
+                        } catch (Exception e) {
+                            selectedAudioFileUri = null;
+                            Toast.makeText(this, "Error adding file: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        }
+                    } else {
+                        Toast.makeText(this, "Error: Could not get file data", Toast.LENGTH_SHORT).show();
+                    }
+                } else if (result.getResultCode() != Activity.RESULT_CANCELED) {
+                    // Only show error if it wasn't a user cancellation
+                    Toast.makeText(this, "Error selecting file", Toast.LENGTH_SHORT).show();
+                }
+            });
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -31,9 +94,21 @@ public class SpeechToTextActivity extends AppCompatActivity {
         
         toolbar.setNavigationOnClickListener(v -> finish());
         
+        setupRetrofit();
         setupButtonListeners();
     }
 
+    private void setupRetrofit() {
+        Retrofit retrofit = new Retrofit.Builder()
+                .baseUrl(ELEVENLABS_API_URL)
+                .addConverterFactory(GsonConverterFactory.create())
+                .build();
+        
+        elevenLabsApi = retrofit.create(ElevenLabsApi.class);
+    }
+
+
+    //khai bao cac doi tuong co trong giao dien
     private void initializeViews() {
         // Toolbar
         toolbar = findViewById(R.id.toolbar);
@@ -54,25 +129,151 @@ public class SpeechToTextActivity extends AppCompatActivity {
         starButton = findViewById(R.id.starButton);
     }
 
+
+    //micro button
     private void setupButtonListeners() {
         micButton.setOnClickListener(v -> {
-            // Handle speech input
+            // Handle speech input (not implemented in this example)
+            Toast.makeText(this, "Microphone recording not implemented in this example", Toast.LENGTH_SHORT).show();
         });
 
         addFileButton.setOnClickListener(v -> {
-            // Handle file upload
+            openFilePicker();
         });
 
         convertButton.setOnClickListener(v -> {
-            // Handle conversion
+            if (selectedAudioFileUri != null) {
+                convertSpeechToText(selectedAudioFileUri);
+            } else {
+                Toast.makeText(this, "Please select an audio file first", Toast.LENGTH_SHORT).show();
+            }
         });
 
         copyButton.setOnClickListener(v -> {
-            // Handle copy text
+            copyTextToClipboard(recognizedText.getText().toString());
         });
 
         starButton.setOnClickListener(v -> {
-            // Handle favorite
+            // Handle favorite (not implemented in this example)
+            Toast.makeText(this, "Favorite function not implemented in this example", Toast.LENGTH_SHORT).show();
         });
+    }
+
+    //Open file Button
+    private void openFilePicker() {
+        try {
+            Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+            intent.setType("audio/*");
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            filePickerLauncher.launch(intent);
+        } catch (Exception e) {
+            Toast.makeText(this, "Error opening file picker: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
+    }
+
+
+    //Convert
+    private void convertSpeechToText(Uri audioFileUri) {
+        try {
+            // Show loading state
+            recognizedText.setText("Converting speech to text...");
+            convertButton.setEnabled(false);
+
+            // Create temporary file from Uri
+            File audioFile = createTempFileFromUri(audioFileUri);
+            
+            // Prepare multipart request
+            RequestBody modelIdBody = RequestBody.create(MediaType.parse("text/plain"), MODEL_ID);
+            RequestBody fileBody = RequestBody.create(MediaType.parse("audio/*"), audioFile);
+            MultipartBody.Part filePart = MultipartBody.Part.createFormData(
+                    "file", 
+                    audioFile.getName(), 
+                    fileBody
+            );
+            
+            // Make API call
+            Call<SpeechToTextResponse> call = elevenLabsApi.convertSpeechToText(API_KEY, modelIdBody, filePart);
+            
+            call.enqueue(new Callback<SpeechToTextResponse>() {
+                @Override
+                public void onResponse(Call<SpeechToTextResponse> call, Response<SpeechToTextResponse> response) {
+                    convertButton.setEnabled(true);
+                    
+                    if (response.isSuccessful() && response.body() != null) {
+                        SpeechToTextResponse sttResponse = response.body();
+                        recognizedText.setText(sttResponse.getText());
+                    } else {
+                        recognizedText.setText("Error: " + response.code() + " - " + response.message());
+                    }
+                }
+
+                @Override
+                public void onFailure(Call<SpeechToTextResponse> call, Throwable t) {
+                    convertButton.setEnabled(true);
+                    recognizedText.setText("Error: " + t.getMessage());
+                }
+            });
+            
+        } catch (IOException e) {
+            convertButton.setEnabled(true);
+            recognizedText.setText("Error processing file: " + e.getMessage());
+        }
+    }
+
+    private File createTempFileFromUri(Uri uri) throws IOException {
+        String fileName = getFileName(uri);
+        File tempFile = new File(getCacheDir(), fileName);
+        
+        try (InputStream inputStream = getContentResolver().openInputStream(uri);
+             FileOutputStream outputStream = new FileOutputStream(tempFile)) {
+            
+            if (inputStream == null) {
+                throw new IOException("Failed to open input stream");
+            }
+            
+            byte[] buffer = new byte[4096];
+            int bytesRead;
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+            }
+            outputStream.flush();
+            return tempFile;
+        }
+    }
+
+    private String getFileName(Uri uri) {
+        String result = null;
+        if (uri.getScheme().equals("content")) {
+            try (Cursor cursor = getContentResolver().query(uri, null, null, null, null)) {
+                if (cursor != null && cursor.moveToFirst()) {
+                    int columnIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                    if (columnIndex >= 0) {
+                        result = cursor.getString(columnIndex);
+                    }
+                }
+            }
+        }
+        if (result == null) {
+            result = uri.getPath();
+            int cut = result.lastIndexOf('/');
+            if (cut != -1) {
+                result = result.substring(cut + 1);
+            }
+        }
+        return result;
+    }
+
+    private void copyTextToClipboard(String text) {
+        ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        ClipData clip = ClipData.newPlainText("Recognized Text", text);
+        clipboard.setPrimaryClip(clip);
+        Toast.makeText(this, "Text copied to clipboard", Toast.LENGTH_SHORT).show();
+    }
+
+    // Add this method to reset the file selection
+    private void resetFileSelection() {
+        selectedAudioFileUri = null;
+        addFileButton.setText(R.string.add_file); // Make sure you have this string resource
+        addFileButton.setIcon(getResources().getDrawable(R.drawable.ic_baseline_file_upload_24, getTheme()));
     }
 }
