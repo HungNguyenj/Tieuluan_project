@@ -10,6 +10,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.provider.OpenableColumns;
 import android.view.View;
+import android.widget.AdapterView;
 import android.widget.ImageButton;
 import android.widget.Spinner;
 import android.widget.TextView;
@@ -23,7 +24,9 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.google.android.material.button.MaterialButton;
 import com.nlu.convertapp.R;
 import com.nlu.convertapp.api.ElevenLabsApi;
+import com.nlu.convertapp.api.ViettelAsrApi;
 import com.nlu.convertapp.models.SpeechToTextResponse;
+import com.nlu.convertapp.models.ViettelSpeechToTextResponse;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -32,7 +35,6 @@ import java.io.InputStream;
 
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
-import okhttp3.OkHttpClient;
 import okhttp3.RequestBody;
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -42,9 +44,19 @@ import retrofit2.converter.gson.GsonConverterFactory;
 
 public class SpeechToTextActivity extends AppCompatActivity {
 
+    // ElevenLabs API constants
     private static final String ELEVENLABS_API_URL = "https://api.elevenlabs.io/";
-    private static final String API_KEY = "sk_2bb0829640a3f35d2a97f863e7b5534fa1a13b1dd9039ebf";
-    private static final String MODEL_ID = "scribe_v1";
+    private static final String ELEVENLABS_API_KEY = "sk_2bb0829640a3f35d2a97f863e7b5534fa1a13b1dd9039ebf";
+    private static final String ELEVENLABS_MODEL_ID = "scribe_v1";
+    
+    // Viettel AI ASR constants
+    private static final String VIETTEL_API_URL = "https://viettelai.vn/";
+    private static final String VIETTEL_TOKEN = "b78353060e4fc496c6641960b931f37d"; // Replace with your actual token
+    
+    // Language constants
+    private static final int LANGUAGE_ENGLISH = 0;
+    private static final int LANGUAGE_VIETNAMESE = 1;
+    private int currentLanguage = LANGUAGE_ENGLISH;
 
     private Toolbar toolbar;
     private Spinner languageSpinner;
@@ -57,8 +69,9 @@ public class SpeechToTextActivity extends AppCompatActivity {
     
     private Uri selectedAudioFileUri;
     private ElevenLabsApi elevenLabsApi;
+    private ViettelAsrApi viettelAsrApi;
 
-    //Add file from phone
+    // Add file from phone
     private final ActivityResultLauncher<Intent> filePickerLauncher = 
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
                 if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
@@ -96,19 +109,43 @@ public class SpeechToTextActivity extends AppCompatActivity {
         
         setupRetrofit();
         setupButtonListeners();
+        setupLanguageSpinner();
     }
 
     private void setupRetrofit() {
-        Retrofit retrofit = new Retrofit.Builder()
+        // Initialize ElevenLabs API
+        Retrofit elevenLabsRetrofit = new Retrofit.Builder()
                 .baseUrl(ELEVENLABS_API_URL)
                 .addConverterFactory(GsonConverterFactory.create())
                 .build();
         
-        elevenLabsApi = retrofit.create(ElevenLabsApi.class);
+        elevenLabsApi = elevenLabsRetrofit.create(ElevenLabsApi.class);
+        
+        // Initialize Viettel ASR API
+        Retrofit viettelRetrofit = new Retrofit.Builder()
+                .baseUrl(VIETTEL_API_URL)
+                .addConverterFactory(GsonConverterFactory.create())
+                .build();
+        
+        viettelAsrApi = viettelRetrofit.create(ViettelAsrApi.class);
     }
 
+    // Setup language spinner
+    private void setupLanguageSpinner() {
+        languageSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                currentLanguage = position;
+            }
 
-    //khai bao cac doi tuong co trong giao dien
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+                currentLanguage = LANGUAGE_ENGLISH; // Default to English
+            }
+        });
+    }
+
+    // Initialize views
     private void initializeViews() {
         // Toolbar
         toolbar = findViewById(R.id.toolbar);
@@ -129,8 +166,7 @@ public class SpeechToTextActivity extends AppCompatActivity {
         starButton = findViewById(R.id.starButton);
     }
 
-
-    //micro button
+    // Setup button listeners
     private void setupButtonListeners() {
         micButton.setOnClickListener(v -> {
             // Handle speech input (not implemented in this example)
@@ -159,7 +195,7 @@ public class SpeechToTextActivity extends AppCompatActivity {
         });
     }
 
-    //Open file Button
+    // Open file picker
     private void openFilePicker() {
         try {
             Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
@@ -171,8 +207,7 @@ public class SpeechToTextActivity extends AppCompatActivity {
         }
     }
 
-
-    //Convert
+    // Convert speech to text
     private void convertSpeechToText(Uri audioFileUri) {
         try {
             // Show loading state
@@ -182,42 +217,94 @@ public class SpeechToTextActivity extends AppCompatActivity {
             // Create temporary file from Uri
             File audioFile = createTempFileFromUri(audioFileUri);
             
-            // Prepare multipart request
-            RequestBody modelIdBody = RequestBody.create(MediaType.parse("text/plain"), MODEL_ID);
-            RequestBody fileBody = RequestBody.create(MediaType.parse("audio/*"), audioFile);
-            MultipartBody.Part filePart = MultipartBody.Part.createFormData(
-                    "file", 
-                    audioFile.getName(), 
-                    fileBody
-            );
-            
-            // Make API call
-            Call<SpeechToTextResponse> call = elevenLabsApi.convertSpeechToText(API_KEY, modelIdBody, filePart);
-            
-            call.enqueue(new Callback<SpeechToTextResponse>() {
-                @Override
-                public void onResponse(Call<SpeechToTextResponse> call, Response<SpeechToTextResponse> response) {
-                    convertButton.setEnabled(true);
-                    
-                    if (response.isSuccessful() && response.body() != null) {
-                        SpeechToTextResponse sttResponse = response.body();
-                        recognizedText.setText(sttResponse.getText());
-                    } else {
-                        recognizedText.setText("Error: " + response.code() + " - " + response.message());
-                    }
-                }
-
-                @Override
-                public void onFailure(Call<SpeechToTextResponse> call, Throwable t) {
-                    convertButton.setEnabled(true);
-                    recognizedText.setText("Error: " + t.getMessage());
-                }
-            });
+            // Choose the appropriate API based on language selection
+            if (currentLanguage == LANGUAGE_ENGLISH) {
+                convertWithElevenLabs(audioFile);
+            } else {
+                convertWithViettelAsr(audioFile);
+            }
             
         } catch (IOException e) {
             convertButton.setEnabled(true);
             recognizedText.setText("Error processing file: " + e.getMessage());
         }
+    }
+    
+    // Convert using ElevenLabs
+    private void convertWithElevenLabs(File audioFile) {
+        // Prepare multipart request
+        RequestBody modelIdBody = RequestBody.create(MediaType.parse("text/plain"), ELEVENLABS_MODEL_ID);
+        RequestBody fileBody = RequestBody.create(MediaType.parse("audio/*"), audioFile);
+        MultipartBody.Part filePart = MultipartBody.Part.createFormData(
+                "file", 
+                audioFile.getName(), 
+                fileBody
+        );
+        
+        // Make API call
+        Call<SpeechToTextResponse> call = elevenLabsApi.convertSpeechToText(ELEVENLABS_API_KEY, modelIdBody, filePart);
+        
+        call.enqueue(new Callback<SpeechToTextResponse>() {
+            @Override
+            public void onResponse(Call<SpeechToTextResponse> call, Response<SpeechToTextResponse> response) {
+                convertButton.setEnabled(true);
+                
+                if (response.isSuccessful() && response.body() != null) {
+                    SpeechToTextResponse sttResponse = response.body();
+                    recognizedText.setText(sttResponse.getText());
+                } else {
+                    recognizedText.setText("Error: " + response.code() + " - " + response.message());
+                }
+            }
+
+            @Override
+            public void onFailure(Call<SpeechToTextResponse> call, Throwable t) {
+                convertButton.setEnabled(true);
+                recognizedText.setText("Error: " + t.getMessage());
+            }
+        });
+    }
+    
+    // Convert using Viettel ASR
+    private void convertWithViettelAsr(File audioFile) {
+        // Prepare multipart request
+        RequestBody fileBody = RequestBody.create(MediaType.parse("audio/*"), audioFile);
+        MultipartBody.Part filePart = MultipartBody.Part.createFormData(
+                "file", 
+                audioFile.getName(), 
+                fileBody
+        );
+        
+        // Make API call
+        Call<ViettelSpeechToTextResponse> call = viettelAsrApi.convertSpeechToText(filePart, VIETTEL_TOKEN);
+        
+        call.enqueue(new Callback<ViettelSpeechToTextResponse>() {
+            @Override
+            public void onResponse(Call<ViettelSpeechToTextResponse> call, Response<ViettelSpeechToTextResponse> response) {
+                convertButton.setEnabled(true);
+                
+                if (response.isSuccessful() && response.body() != null) {
+                    ViettelSpeechToTextResponse viettelResponse = response.body();
+                    
+                    if (viettelResponse.getCode() == 0 && viettelResponse.getResponse() != null) {
+                        // Success
+                        recognizedText.setText(viettelResponse.getResponse().getText());
+                    } else {
+                        // API error
+                        recognizedText.setText("API Error: " + viettelResponse.getMessage());
+                    }
+                } else {
+                    // HTTP error
+                    recognizedText.setText("Error: " + response.code() + " - " + response.message());
+                }
+            }
+
+            @Override
+            public void onFailure(Call<ViettelSpeechToTextResponse> call, Throwable t) {
+                convertButton.setEnabled(true);
+                recognizedText.setText("Network Error: " + t.getMessage());
+            }
+        });
     }
 
     private File createTempFileFromUri(Uri uri) throws IOException {
@@ -270,10 +357,10 @@ public class SpeechToTextActivity extends AppCompatActivity {
         Toast.makeText(this, "Text copied to clipboard", Toast.LENGTH_SHORT).show();
     }
 
-    // Add this method to reset the file selection
+    // Reset the file selection
     private void resetFileSelection() {
         selectedAudioFileUri = null;
-        addFileButton.setText(R.string.add_file); // Make sure you have this string resource
+        addFileButton.setText(R.string.add_file);
         addFileButton.setIcon(getResources().getDrawable(R.drawable.ic_baseline_file_upload_24, getTheme()));
     }
 }
