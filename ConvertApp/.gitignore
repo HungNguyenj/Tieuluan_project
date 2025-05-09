@@ -13,3 +13,6 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# API Keys
+app/src/main/java/com/nlu/convertapp/api/ApiKeys.java

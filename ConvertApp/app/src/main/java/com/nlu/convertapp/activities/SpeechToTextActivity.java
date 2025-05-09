@@ -27,6 +27,7 @@ import com.nlu.convertapp.api.ElevenLabsApi;
 import com.nlu.convertapp.api.ViettelAsrApi;
 import com.nlu.convertapp.models.SpeechToTextResponse;
 import com.nlu.convertapp.models.ViettelSpeechToTextResponse;
+import com.nlu.convertapp.api.ApiKeys;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -46,12 +47,12 @@ public class SpeechToTextActivity extends AppCompatActivity {
 
     // ElevenLabs API constants
     private static final String ELEVENLABS_API_URL = "https://api.elevenlabs.io/";
-    private static final String ELEVENLABS_API_KEY = "sk_2bb0829640a3f35d2a97f863e7b5534fa1a13b1dd9039ebf";
-    private static final String ELEVENLABS_MODEL_ID = "scribe_v1";
+    private static final String ELEVENLABS_API_KEY = ApiKeys.ELEVENLABS_API_KEY;
+    private static final String ELEVENLABS_MODEL_ID = ApiKeys.ELEVENLABS_MODEL_ID;
     
     // Viettel AI ASR constants
     private static final String VIETTEL_API_URL = "https://viettelai.vn/";
-    private static final String VIETTEL_TOKEN = "b78353060e4fc496c6641960b931f37d"; // Replace with your actual token
+    private static final String VIETTEL_TOKEN = ApiKeys.VIETTEL_TOKEN;
     
     // Language constants
     private static final int LANGUAGE_ENGLISH = 0;

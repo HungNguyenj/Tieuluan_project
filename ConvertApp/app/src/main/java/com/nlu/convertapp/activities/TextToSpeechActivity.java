@@ -22,6 +22,7 @@ import androidx.core.view.WindowInsetsCompat;
 import com.google.android.material.button.MaterialButton;
 import com.google.gson.Gson;
 import com.nlu.convertapp.R;
+import com.nlu.convertapp.api.ApiKeys;
 import com.nlu.convertapp.api.ElevenLabsApi;
 import com.nlu.convertapp.api.ViettelAiApi;
 import com.nlu.convertapp.models.TextToSpeechRequest;
@@ -46,16 +47,16 @@ import retrofit2.converter.gson.GsonConverterFactory;
 public class TextToSpeechActivity extends AppCompatActivity {
 
     // ElevenLabs API constants
-    private static final String ELEVENLABS_API_KEY = "sk_2bb0829640a3f35d2a97f863e7b5534fa1a13b1dd9039ebf";
+    private static final String ELEVENLABS_API_KEY = ApiKeys.ELEVENLABS_API_KEY;
     private static final String ELEVENLABS_BASE_URL = "https://api.elevenlabs.io/";
-    private static final String ELEVENLABS_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb";
-    private static final String ELEVENLABS_OUTPUT_FORMAT = "mp3_44100_128";
+    private static final String ELEVENLABS_VOICE_ID = ApiKeys.ELEVENLABS_VOICE_ID;
+    private static final String ELEVENLABS_OUTPUT_FORMAT = ApiKeys.ELEVENLABS_OUTPUT_FORMAT;
     private static final String ELEVENLABS_MODEL_ID = "eleven_multilingual_v2";
 
     // Viettel AI TTS constants
     private static final String VIETTEL_BASE_URL = "https://viettelai.vn/";
-    private static final String VIETTEL_TOKEN = "b78353060e4fc496c6641960b931f37d"; // Replace with your actual token
-    private static final String VIETTEL_VOICE = "hcm-diemmy";
+    private static final String VIETTEL_TOKEN = ApiKeys.VIETTEL_TOKEN;
+    private static final String VIETTEL_VOICE = ApiKeys.VIETTEL_VOICE;
     private static final float VIETTEL_SPEED = 1.0f;
     private static final int VIETTEL_RETURN_OPTION = 3;
     private static final boolean VIETTEL_WITHOUT_FILTER = false;
