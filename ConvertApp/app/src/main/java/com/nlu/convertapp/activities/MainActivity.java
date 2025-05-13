@@ -52,7 +52,8 @@ public class MainActivity extends AppCompatActivity {
         });
 
         readBankTransactionButton.setOnClickListener(v -> {
-            // TODO: Xử lý đọc giao dịch ngân hàng tại đây
+            Intent intent = new Intent(MainActivity.this, BankTransactionActivity.class);
+            startActivity(intent);
         });
 
         phoneCallButton.setOnClickListener(v -> {
