@@ -57,7 +57,8 @@ public class MainActivity extends AppCompatActivity {
         });
 
         phoneCallButton.setOnClickListener(v -> {
-            // TODO: Xử lý gọi điện tại đây
+            Intent intent = new Intent(MainActivity.this, PhoneDialerActivity.class);
+            startActivity(intent);
         });
     }
 }
