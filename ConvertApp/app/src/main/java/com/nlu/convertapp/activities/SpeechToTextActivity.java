@@ -9,6 +9,7 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.OpenableColumns;
+import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ImageButton;
@@ -33,15 +34,23 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Map;
 
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
 import okhttp3.RequestBody;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
 import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
+import okhttp3.logging.HttpLoggingInterceptor;
+import com.google.gson.Gson;
+import java.util.concurrent.TimeUnit;
+import android.media.MediaMetadataRetriever;
 
 public class SpeechToTextActivity extends AppCompatActivity {
 
@@ -53,11 +62,16 @@ public class SpeechToTextActivity extends AppCompatActivity {
     // Viettel AI ASR constants
     private static final String VIETTEL_API_URL = "https://viettelai.vn/";
     private static final String VIETTEL_TOKEN = ApiKeys.VIETTEL_TOKEN;
-    
+
     // Language constants
     private static final int LANGUAGE_ENGLISH = 0;
     private static final int LANGUAGE_VIETNAMESE = 1;
     private int currentLanguage = LANGUAGE_ENGLISH;
+
+    // Thêm hằng số cho phép kiểm tra định dạng file
+    private static final String[] SUPPORTED_AUDIO_FORMATS = {
+        "audio/wav", "audio/x-wav", "audio/mp3", "audio/mpeg"
+    };
 
     private Toolbar toolbar;
     private Spinner languageSpinner;
@@ -121,13 +135,21 @@ public class SpeechToTextActivity extends AppCompatActivity {
                 .build();
         
         elevenLabsApi = elevenLabsRetrofit.create(ElevenLabsApi.class);
-        
+
         // Initialize Viettel ASR API
+        OkHttpClient client = new OkHttpClient.Builder()
+                .connectTimeout(60, TimeUnit.SECONDS)
+                .readTimeout(60, TimeUnit.SECONDS)
+                .writeTimeout(60, TimeUnit.SECONDS)
+                .addInterceptor(new HttpLoggingInterceptor().setLevel(HttpLoggingInterceptor.Level.BODY))
+                .build();
+
         Retrofit viettelRetrofit = new Retrofit.Builder()
                 .baseUrl(VIETTEL_API_URL)
+                .client(client)
                 .addConverterFactory(GsonConverterFactory.create())
                 .build();
-        
+
         viettelAsrApi = viettelRetrofit.create(ViettelAsrApi.class);
     }
 
@@ -202,6 +224,7 @@ public class SpeechToTextActivity extends AppCompatActivity {
             Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
             intent.setType("audio/*");
             intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.putExtra(Intent.EXTRA_MIME_TYPES, SUPPORTED_AUDIO_FORMATS);
             filePickerLauncher.launch(intent);
         } catch (Exception e) {
             Toast.makeText(this, "Error opening file picker: " + e.getMessage(), Toast.LENGTH_SHORT).show();
@@ -211,14 +234,50 @@ public class SpeechToTextActivity extends AppCompatActivity {
     // Convert speech to text
     private void convertSpeechToText(Uri audioFileUri) {
         try {
+            // Kiểm tra mime type của file
+            String mimeType = getContentResolver().getType(audioFileUri);
+            Log.d("ViettelASR", "File MIME type: " + mimeType);
+            
+            // Kiểm tra kích thước file trước khi xử lý
+            long fileSize = getFileSizeFromUri(audioFileUri);
+            Log.d("ViettelASR", "Original file size: " + fileSize + " bytes");
+            
+            if (fileSize <= 0) {
+                recognizedText.setText("Lỗi: Không thể đọc file hoặc file rỗng");
+                return;
+            }
+            
             // Show loading state
-            recognizedText.setText("Converting speech to text...");
+            recognizedText.setText("Đang xử lý file âm thanh...");
             convertButton.setEnabled(false);
 
-            // Create temporary file from Uri
+            // Tạo temporary file
             File audioFile = createTempFileFromUri(audioFileUri);
             
-            // Choose the appropriate API based on language selection
+            // Kiểm tra file tạm sau khi tạo
+            if (!audioFile.exists() || audioFile.length() == 0) {
+                recognizedText.setText("Lỗi: File tạm không hợp lệ");
+                return;
+            }
+            
+            // Log thông tin file tạm
+            Log.d("ViettelASR", "Temp file created: " + audioFile.getAbsolutePath());
+            Log.d("ViettelASR", "Temp file size: " + audioFile.length() + " bytes");
+            
+            // Kiểm tra nội dung file có đọc được không
+            try {
+                MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+                retriever.setDataSource(audioFile.getAbsolutePath());
+                String duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
+                Log.d("ViettelASR", "Audio duration: " + duration + " ms");
+                retriever.release();
+            } catch (Exception e) {
+                Log.e("ViettelASR", "Error reading audio metadata", e);
+                recognizedText.setText("Lỗi: File âm thanh không hợp lệ");
+                return;
+            }
+            
+            // Chọn API phù hợp
             if (currentLanguage == LANGUAGE_ENGLISH) {
                 convertWithElevenLabs(audioFile);
             } else {
@@ -226,8 +285,9 @@ public class SpeechToTextActivity extends AppCompatActivity {
             }
             
         } catch (IOException e) {
+            Log.e("ViettelASR", "Error processing file", e);
             convertButton.setEnabled(true);
-            recognizedText.setText("Error processing file: " + e.getMessage());
+            recognizedText.setText("Lỗi xử lý file: " + e.getMessage());
         }
     }
     
@@ -268,50 +328,156 @@ public class SpeechToTextActivity extends AppCompatActivity {
     
     // Convert using Viettel ASR
     private void convertWithViettelAsr(File audioFile) {
-        // Prepare multipart request
-        RequestBody fileBody = RequestBody.create(MediaType.parse("audio/*"), audioFile);
-        MultipartBody.Part filePart = MultipartBody.Part.createFormData(
-                "file", 
-                audioFile.getName(), 
-                fileBody
-        );
+        // Log thông tin file trước khi gửi
+        Log.d("ViettelASR", String.format("Sending file: %s (size: %d bytes)", 
+            audioFile.getName(), audioFile.length()));
         
-        // Make API call
-        Call<ViettelSpeechToTextResponse> call = viettelAsrApi.convertSpeechToText(filePart, VIETTEL_TOKEN);
+        // Xác định MediaType dựa trên extension
+        String contentType = "audio/wav"; // default
+        if (audioFile.getName().toLowerCase().endsWith(".mp3")) {
+            contentType = "audio/mpeg";
+        }
+        
+        // Tạo request body với content type phù hợp
+        RequestBody fileBody = RequestBody.create(MediaType.parse(contentType), audioFile);
+        MultipartBody.Part filePart = MultipartBody.Part.createFormData("file", 
+            audioFile.getName(), fileBody);
+        
+        // Tạo token part
+        RequestBody tokenBody = RequestBody.create(MediaType.parse("text/plain"), VIETTEL_TOKEN);
+        
+        // Tạo OkHttpClient với timeout và logging
+        OkHttpClient client = new OkHttpClient.Builder()
+                .connectTimeout(60, TimeUnit.SECONDS)
+                .readTimeout(60, TimeUnit.SECONDS)
+                .writeTimeout(60, TimeUnit.SECONDS)
+                .addInterceptor(chain -> {
+                    Request original = chain.request();
+                    Log.d("ViettelASR", "Sending request to: " + original.url());
+                    Log.d("ViettelASR", "Request headers: " + original.headers());
+                    return chain.proceed(original);
+                })
+                .addInterceptor(new HttpLoggingInterceptor(message -> 
+                    Log.d("ViettelASR", "OkHttp: " + message))
+                    .setLevel(HttpLoggingInterceptor.Level.BODY))
+                .build();
+        
+        // Tạo Retrofit instance
+        Retrofit viettelRetrofit = new Retrofit.Builder()
+                .baseUrl(VIETTEL_API_URL)
+                .client(client)
+                .addConverterFactory(GsonConverterFactory.create())
+                .build();
+        
+        viettelAsrApi = viettelRetrofit.create(ViettelAsrApi.class);
+        
+        // Gửi request
+        Call<ViettelSpeechToTextResponse> call = viettelAsrApi.convertSpeechToText(filePart, tokenBody);
         
         call.enqueue(new Callback<ViettelSpeechToTextResponse>() {
             @Override
             public void onResponse(Call<ViettelSpeechToTextResponse> call, Response<ViettelSpeechToTextResponse> response) {
                 convertButton.setEnabled(true);
                 
-                if (response.isSuccessful() && response.body() != null) {
+                // Log chi tiết response
+                Log.d("ViettelASR", "HTTP Status Code: " + response.code());
+                if (response.body() != null) {
+                    Log.d("ViettelASR", "Full Response: " + new Gson().toJson(response.body()));
+                }
+                
+                if (response.isSuccessful()) {
                     ViettelSpeechToTextResponse viettelResponse = response.body();
-                    
-                    if (viettelResponse.getCode() == 0 && viettelResponse.getResponse() != null) {
-                        // Success
-                        recognizedText.setText(viettelResponse.getResponse().getText());
+                    if (viettelResponse != null) {
+                        // Log chi tiết từng trường
+                        Log.d("ViettelASR", "API Code: " + viettelResponse.getCode());
+                        Log.d("ViettelASR", "API Message: " + viettelResponse.getMessage());
+                        
+                        if (viettelResponse.getResponse() != null && 
+                            viettelResponse.getResponse().getResult() != null && 
+                            !viettelResponse.getResponse().getResult().isEmpty()) {
+                            
+                            ViettelSpeechToTextResponse.TranscriptResult result = viettelResponse.getResponse().getResult().get(0);
+                            String transcript = result.getTranscript();
+                            double confidence = result.getConfidence();
+                            
+                            // Log kết quả
+                            Log.d("ViettelASR", "Transcript: " + transcript);
+                            Log.d("ViettelASR", "Confidence: " + confidence);
+                            
+                            if (transcript != null && !transcript.isEmpty()) {
+                                // Hiển thị kết quả với độ tin cậy
+                                String displayText = transcript + "\n" +
+                                                  "Độ tin cậy: " + String.format("%.2f%%", confidence * 100);
+                                recognizedText.setText(displayText);
+                            } else {
+                                recognizedText.setText("Không nhận dạng được nội dung âm thanh");
+                            }
+                        } else {
+                            recognizedText.setText("Không có kết quả nhận dạng");
+                        }
                     } else {
-                        // API error
-                        recognizedText.setText("API Error: " + viettelResponse.getMessage());
+                        recognizedText.setText("Không nhận được phản hồi từ server");
                     }
                 } else {
-                    // HTTP error
-                    recognizedText.setText("Error: " + response.code() + " - " + response.message());
+                    String errorBody = "";
+                    try {
+                        if (response.errorBody() != null) {
+                            errorBody = response.errorBody().string();
+                        }
+                    } catch (IOException e) {
+                        errorBody = "Could not read error body";
+                    }
+                    recognizedText.setText("Lỗi kết nối: " + response.code() + 
+                                         "\nChi tiết: " + errorBody);
                 }
             }
 
             @Override
             public void onFailure(Call<ViettelSpeechToTextResponse> call, Throwable t) {
                 convertButton.setEnabled(true);
-                recognizedText.setText("Network Error: " + t.getMessage());
+                Log.e("ViettelASR", "Network Error", t);
+                recognizedText.setText("Lỗi mạng: " + t.getMessage());
             }
         });
     }
 
+    // Thêm phương thức lấy kích thước file
+    private long getFileSizeFromUri(Uri uri) {
+        try {
+            Cursor cursor = getContentResolver().query(uri, null, null, null, null);
+            if (cursor != null) {
+                int sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE);
+                cursor.moveToFirst();
+                long size = cursor.getLong(sizeIndex);
+                cursor.close();
+                return size;
+            }
+        } catch (Exception e) {
+            Log.e("ViettelASR", "Error getting file size", e);
+        }
+        
+        // Nếu không lấy được qua cursor, thử đọc trực tiếp
+        try (InputStream inputStream = getContentResolver().openInputStream(uri)) {
+            if (inputStream != null) {
+                return inputStream.available();
+            }
+        } catch (IOException e) {
+            Log.e("ViettelASR", "Error reading file size from stream", e);
+        }
+        
+        return -1;
+    }
+
+    // Sửa lại phương thức tạo file tạm
     private File createTempFileFromUri(Uri uri) throws IOException {
         String fileName = getFileName(uri);
-        File tempFile = new File(getCacheDir(), fileName);
+        String extension = getFileExtension(fileName);
         
+        // Tạo file tạm với extension gốc
+        File tempFile = File.createTempFile("audio_", extension, getCacheDir());
+        Log.d("ViettelASR", "Creating temp file: " + tempFile.getAbsolutePath());
+        
+        // Đọc và ghi file với buffer lớn hơn
         try (InputStream inputStream = getContentResolver().openInputStream(uri);
              FileOutputStream outputStream = new FileOutputStream(tempFile)) {
             
@@ -319,14 +485,34 @@ public class SpeechToTextActivity extends AppCompatActivity {
                 throw new IOException("Failed to open input stream");
             }
             
-            byte[] buffer = new byte[4096];
+            byte[] buffer = new byte[16384]; // 16KB buffer
             int bytesRead;
+            long totalBytes = 0;
+            
             while ((bytesRead = inputStream.read(buffer)) != -1) {
                 outputStream.write(buffer, 0, bytesRead);
+                totalBytes += bytesRead;
+                Log.d("ViettelASR", "Bytes written: " + totalBytes);
             }
+            
             outputStream.flush();
+            
+            // Verify file was written correctly
+            if (tempFile.length() != totalBytes) {
+                throw new IOException("File size mismatch. Expected: " + totalBytes + ", Actual: " + tempFile.length());
+            }
+            
             return tempFile;
         }
+    }
+
+    // Thêm phương thức lấy extension của file
+    private String getFileExtension(String fileName) {
+        int lastDot = fileName.lastIndexOf(".");
+        if (lastDot != -1) {
+            return fileName.substring(lastDot);
+        }
+        return ".tmp";
     }
 
     private String getFileName(Uri uri) {
