@@ -1,5 +1,6 @@
 package com.nlu.convertapp.activities;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.ClipData;
 import android.content.ClipboardManager;
@@ -30,10 +31,14 @@ import com.nlu.convertapp.models.SpeechToTextResponse;
 import com.nlu.convertapp.models.ViettelSpeechToTextResponse;
 import com.nlu.convertapp.api.ApiKeys;
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.RandomAccessFile;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -50,7 +55,15 @@ import retrofit2.converter.gson.GsonConverterFactory;
 import okhttp3.logging.HttpLoggingInterceptor;
 import com.google.gson.Gson;
 import java.util.concurrent.TimeUnit;
+import android.media.AudioFormat;
+import android.media.AudioRecord;
+import android.media.AudioTrack;
 import android.media.MediaMetadataRetriever;
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.media.MediaRecorder;
+import android.os.Build;
+import android.os.Environment;
 
 public class SpeechToTextActivity extends AppCompatActivity {
 
@@ -85,6 +98,22 @@ public class SpeechToTextActivity extends AppCompatActivity {
     private Uri selectedAudioFileUri;
     private ElevenLabsApi elevenLabsApi;
     private ViettelAsrApi viettelAsrApi;
+
+    // Recording constants
+    private static final int PERMISSION_REQUEST_CODE = 1;
+    private static final String[] REQUIRED_PERMISSIONS = {
+        Manifest.permission.RECORD_AUDIO,
+        Manifest.permission.WRITE_EXTERNAL_STORAGE
+    };
+    
+    // Recording variables
+    private static final int SAMPLE_RATE = 16000;
+    private static final int CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO;
+    private static final int AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT;
+    private AudioRecord audioRecord;
+    private boolean isRecording = false;
+    private Thread recordingThread = null;
+    private String audioFilePath;
 
     // Add file from phone
     private final ActivityResultLauncher<Intent> filePickerLauncher = 
@@ -125,6 +154,39 @@ public class SpeechToTextActivity extends AppCompatActivity {
         setupRetrofit();
         setupButtonListeners();
         setupLanguageSpinner();
+        checkPermissions();
+    }
+
+    private void checkPermissions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            boolean allPermissionsGranted = true;
+            for (String permission : REQUIRED_PERMISSIONS) {
+                if (checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED) {
+                    allPermissionsGranted = false;
+                    break;
+                }
+            }
+            if (!allPermissionsGranted) {
+                requestPermissions(REQUIRED_PERMISSIONS, PERMISSION_REQUEST_CODE);
+            }
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == PERMISSION_REQUEST_CODE) {
+            boolean allPermissionsGranted = true;
+            for (int result : grantResults) {
+                if (result != PackageManager.PERMISSION_GRANTED) {
+                    allPermissionsGranted = false;
+                    break;
+                }
+            }
+            if (!allPermissionsGranted) {
+                Toast.makeText(this, "Permissions are required for recording audio", Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 
     private void setupRetrofit() {
@@ -192,8 +254,11 @@ public class SpeechToTextActivity extends AppCompatActivity {
     // Setup button listeners
     private void setupButtonListeners() {
         micButton.setOnClickListener(v -> {
-            // Handle speech input (not implemented in this example)
-            Toast.makeText(this, "Microphone recording not implemented in this example", Toast.LENGTH_SHORT).show();
+            if (isRecording) {
+                stopRecording();
+            } else {
+                startRecording();
+            }
         });
 
         addFileButton.setOnClickListener(v -> {
@@ -549,5 +614,168 @@ public class SpeechToTextActivity extends AppCompatActivity {
         selectedAudioFileUri = null;
         addFileButton.setText(R.string.add_file);
         addFileButton.setIcon(getResources().getDrawable(R.drawable.ic_baseline_file_upload_24, getTheme()));
+    }
+
+    @SuppressLint("MissingPermission")
+    private void startRecording() {
+        try {
+            // Create output directory if it doesn't exist
+            File outputDir = new File(getExternalFilesDir(null), "AudioRecordings");
+            if (!outputDir.exists()) {
+                outputDir.mkdirs();
+            }
+
+            // Create output file
+            String timestamp = new java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.getDefault())
+                    .format(new java.util.Date());
+            audioFilePath = new File(outputDir, "AUDIO_" + timestamp + ".wav").getAbsolutePath();
+
+            // Get min buffer size
+            int minBufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT);
+
+            // Initialize AudioRecord
+            audioRecord = new AudioRecord(MediaRecorder.AudioSource.MIC,
+                    SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT, minBufferSize);
+
+            // Start recording
+            audioRecord.startRecording();
+            isRecording = true;
+
+            // Update UI
+            micButton.setImageResource(R.drawable.ic_stop);
+            Toast.makeText(this, "Recording started", Toast.LENGTH_SHORT).show();
+
+            // Start recording thread
+            recordingThread = new Thread(() -> {
+                writeAudioDataToFile(minBufferSize);
+            }, "AudioRecorder Thread");
+            recordingThread.start();
+
+        } catch (Exception e) {
+            Log.e("SpeechToText", "Error starting recording", e);
+            Toast.makeText(this, "Error starting recording: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void writeAudioDataToFile(int bufferSize) {
+        byte[] audioData = new byte[bufferSize];
+        FileOutputStream os = null;
+        try {
+            os = new FileOutputStream(audioFilePath);
+            
+            // Write WAV header
+            writeWavHeader(os, CHANNEL_CONFIG, SAMPLE_RATE, AUDIO_FORMAT);
+
+            while (isRecording) {
+                int read = audioRecord.read(audioData, 0, bufferSize);
+                if (read != AudioRecord.ERROR_INVALID_OPERATION) {
+                    os.write(audioData, 0, read);
+                }
+            }
+
+            // Update WAV header with final file size
+            updateWavHeader(audioFilePath);
+
+        } catch (IOException e) {
+            Log.e("SpeechToText", "Error writing audio file", e);
+        } finally {
+            if (os != null) {
+                try {
+                    os.close();
+                } catch (IOException e) {
+                    Log.e("SpeechToText", "Error closing output stream", e);
+                }
+            }
+        }
+    }
+
+    private void writeWavHeader(FileOutputStream out, int channelConfig,
+                              int sampleRate, int audioFormat) throws IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        DataOutputStream data = new DataOutputStream(buffer);
+
+        // RIFF header
+        data.writeBytes("RIFF"); // ChunkID
+        data.writeInt(0); // ChunkSize (will be updated later)
+        data.writeBytes("WAVE"); // Format
+        
+        // fmt subchunk
+        data.writeBytes("fmt "); // Subchunk1ID
+        data.writeInt(Integer.reverseBytes(16)); // Subchunk1Size
+        data.writeShort(Short.reverseBytes((short) 1)); // AudioFormat (PCM = 1)
+        data.writeShort(Short.reverseBytes((short) 1)); // NumChannels (Mono = 1)
+        data.writeInt(Integer.reverseBytes(sampleRate)); // SampleRate
+        data.writeInt(Integer.reverseBytes(sampleRate * 2)); // ByteRate
+        data.writeShort(Short.reverseBytes((short) 2)); // BlockAlign
+        data.writeShort(Short.reverseBytes((short) 16)); // BitsPerSample
+        
+        // data subchunk
+        data.writeBytes("data"); // Subchunk2ID
+        data.writeInt(0); // Subchunk2Size (will be updated later)
+
+        // Write header
+        out.write(buffer.toByteArray());
+    }
+
+    private void updateWavHeader(String filePath) {
+        try {
+            File file = new File(filePath);
+            long fileSize = file.length();
+            long dataSize = fileSize - 44; // Total size minus header size
+
+            RandomAccessFile raf = new RandomAccessFile(file, "rw");
+            // ChunkSize
+            raf.seek(4);
+            raf.writeInt(Integer.reverseBytes((int) (fileSize - 8)));
+            // Subchunk2Size
+            raf.seek(40);
+            raf.writeInt(Integer.reverseBytes((int) dataSize));
+            raf.close();
+        } catch (IOException e) {
+            Log.e("SpeechToText", "Error updating WAV header", e);
+        }
+    }
+
+    private void stopRecording() {
+        if (audioRecord != null) {
+            try {
+                isRecording = false;
+                
+                // Wait for recording thread to finish
+                if (recordingThread != null) {
+                    recordingThread.join();
+                    recordingThread = null;
+                }
+
+                // Stop and release AudioRecord
+                audioRecord.stop();
+                audioRecord.release();
+                audioRecord = null;
+
+                // Update UI
+                micButton.setImageResource(R.drawable.ic_fa_microphone);
+                Toast.makeText(this, "Recording stopped", Toast.LENGTH_SHORT).show();
+
+                // Convert the recorded file
+                Uri audioUri = Uri.fromFile(new File(audioFilePath));
+                selectedAudioFileUri = audioUri;
+                convertSpeechToText(audioUri);
+
+            } catch (Exception e) {
+                Log.e("SpeechToText", "Error stopping recording", e);
+                Toast.makeText(this, "Error stopping recording: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (audioRecord != null) {
+            isRecording = false;
+            audioRecord.stop();
+            audioRecord.release();
+            audioRecord = null;
+        }
     }
 }
