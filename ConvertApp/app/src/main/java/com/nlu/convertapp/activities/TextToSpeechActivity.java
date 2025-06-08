@@ -25,13 +25,18 @@ import com.nlu.convertapp.R;
 import com.nlu.convertapp.api.ApiKeys;
 import com.nlu.convertapp.api.ElevenLabsApi;
 import com.nlu.convertapp.api.ViettelAiApi;
+import com.nlu.convertapp.models.TextStorageItem;
 import com.nlu.convertapp.models.TextToSpeechRequest;
 import com.nlu.convertapp.models.ViettelTtsRequest;
+import com.nlu.convertapp.repository.TextStorageRepository;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.MediaType;
@@ -88,6 +93,9 @@ public class TextToSpeechActivity extends AppCompatActivity {
     private ElevenLabsApi elevenLabsApi;
     private ViettelAiApi viettelAiApi;
 
+    private TextStorageRepository textStorageRepository;
+    private boolean isStarred = false;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -99,18 +107,16 @@ public class TextToSpeechActivity extends AppCompatActivity {
             return insets;
         });
 
+        // Initialize repository
+        textStorageRepository = new TextStorageRepository(this);
+        textStorageRepository.open();
+
         initializeViews();
         setupRetrofit();
 
         setSupportActionBar(toolbar);
 
-        toolbar.setNavigationOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                // Kết thúc activity hiện tại để quay về MainActivity
-                finish();
-            }
-        });
+        toolbar.setNavigationOnClickListener(v -> finish());
 
         // Setup language spinner listener
         languageSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
@@ -183,26 +189,39 @@ public class TextToSpeechActivity extends AppCompatActivity {
 
     private void setupButtonListeners() {
         // File button click listener
-        fileButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                // Xử lý sự kiện upload file
-            }
+        fileButton.setOnClickListener(v -> {
+            // Xử lý sự kiện upload file
         });
 
         // Copy button click listener
-        copyButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                // Xử lý sự kiện copy text
+        copyButton.setOnClickListener(v -> {
+            String text = textArea.getText().toString();
+            if (!text.isEmpty()) {
+                android.content.ClipboardManager clipboard = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                android.content.ClipData clip = android.content.ClipData.newPlainText("Converted Text", text);
+                clipboard.setPrimaryClip(clip);
+                Toast.makeText(this, "Text copied to clipboard", Toast.LENGTH_SHORT).show();
             }
         });
 
         // Star button click listener
-        starButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                // Xử lý sự kiện đánh dấu yêu thích
+        starButton.setOnClickListener(v -> {
+            String text = textArea.getText().toString().trim();
+            if (!text.isEmpty()) {
+                isStarred = !isStarred;
+                if (isStarred) {
+                    // Save to database
+                    SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss", Locale.getDefault());
+                    String currentDate = sdf.format(new Date());
+                    
+                    textStorageRepository.insertText(new TextStorageItem(currentDate, text, true));
+                    starButton.setImageResource(R.drawable.ic_baseline_star_solid);
+                    Toast.makeText(this, "Text saved to storage", Toast.LENGTH_SHORT).show();
+                } else {
+                    starButton.setImageResource(R.drawable.ic_baseline_star_regular);
+                }
+            } else {
+                Toast.makeText(this, "Please enter text to save", Toast.LENGTH_SHORT).show();
             }
         });
 
@@ -470,5 +489,8 @@ public class TextToSpeechActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         releaseMediaPlayer();
+        if (textStorageRepository != null) {
+            textStorageRepository.close();
+        }
     }
 }

@@ -30,6 +30,11 @@ import com.nlu.convertapp.api.ViettelAsrApi;
 import com.nlu.convertapp.models.SpeechToTextResponse;
 import com.nlu.convertapp.models.ViettelSpeechToTextResponse;
 import com.nlu.convertapp.api.ApiKeys;
+import com.nlu.convertapp.repository.TextStorageRepository;
+import com.nlu.convertapp.models.TextStorageItem;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
@@ -115,6 +120,9 @@ public class SpeechToTextActivity extends AppCompatActivity {
     private Thread recordingThread = null;
     private String audioFilePath;
 
+    private TextStorageRepository textStorageRepository;
+    private boolean isStarred = false;
+
     // Add file from phone
     private final ActivityResultLauncher<Intent> filePickerLauncher = 
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
@@ -145,6 +153,10 @@ public class SpeechToTextActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_speech_to_text);
+        
+        // Initialize repository
+        textStorageRepository = new TextStorageRepository(this);
+        textStorageRepository.open();
         
         initializeViews();
         setSupportActionBar(toolbar);
@@ -278,8 +290,23 @@ public class SpeechToTextActivity extends AppCompatActivity {
         });
 
         starButton.setOnClickListener(v -> {
-            // Handle favorite (not implemented in this example)
-            Toast.makeText(this, "Favorite function not implemented in this example", Toast.LENGTH_SHORT).show();
+            String text = recognizedText.getText().toString().trim();
+            if (!text.isEmpty()) {
+                isStarred = !isStarred;
+                if (isStarred) {
+                    // Save to database
+                    SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss", Locale.getDefault());
+                    String currentDate = sdf.format(new Date());
+                    
+                    textStorageRepository.insertText(new TextStorageItem(currentDate, text, true));
+                    starButton.setImageResource(R.drawable.ic_baseline_star_solid);
+                    Toast.makeText(this, "Text saved to storage", Toast.LENGTH_SHORT).show();
+                } else {
+                    starButton.setImageResource(R.drawable.ic_baseline_star_regular);
+                }
+            } else {
+                Toast.makeText(this, "No text available to save", Toast.LENGTH_SHORT).show();
+            }
         });
     }
 
@@ -776,6 +803,9 @@ public class SpeechToTextActivity extends AppCompatActivity {
             audioRecord.stop();
             audioRecord.release();
             audioRecord = null;
+        }
+        if (textStorageRepository != null) {
+            textStorageRepository.close();
         }
     }
 }
