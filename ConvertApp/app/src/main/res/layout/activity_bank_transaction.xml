@@ -13,7 +13,7 @@
         android:layout_height="?attr/actionBarSize"
         android:background="#003366"
         app:titleTextColor="#FFFFFF"
-        app:title="Bank Transaction Monitor"
+        app:title="Bank Notifications"
         app:titleMarginStart="30dp"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -26,66 +26,24 @@
         android:layout_marginTop="8dp"
         android:clipToPadding="false"
         android:paddingBottom="16dp"
-        app:layout_constraintBottom_toTopOf="@id/controlPanel"
+        app:layout_constraintBottom_toTopOf="@id/permissionStatusButton"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/toolbar"
         tools:listitem="@layout/item_transaction" />
 
-    <LinearLayout
-        android:id="@+id/controlPanel"
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/permissionStatusButton"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="16dp"
-        android:background="#F5F5F5"
-        app:layout_constraintBottom_toBottomOf="parent">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
-
-            <Spinner
-                android:id="@+id/bankSpinner"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginEnd="8dp"
-                android:background="@android:drawable/btn_dropdown"
-                android:minHeight="48dp" />
-
-            <EditText
-                android:id="@+id/accountNumberEditText"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginStart="8dp"
-                android:hint="Account number"
-                android:inputType="number"
-                android:minHeight="48dp"
-                android:padding="12dp"
-                android:background="@android:drawable/editbox_background" />
-        </LinearLayout>
-
-        <Button
-            android:id="@+id/confirmButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:backgroundTint="#003366"
-            android:text="Start Monitoring"
-            android:textColor="#FFFFFF" />
-
-        <Button
-            android:id="@+id/enableNotificationsButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:backgroundTint="#FF9800"
-            android:text="Enable Notification Access"
-            android:textColor="#FFFFFF" />
-    </LinearLayout>
+        android:layout_margin="16dp"
+        android:padding="12dp"
+        android:text="Checking Permission Status..."
+        android:textColor="#FFFFFF"
+        app:backgroundTint="#FF9800"
+        app:cornerRadius="8dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout> 

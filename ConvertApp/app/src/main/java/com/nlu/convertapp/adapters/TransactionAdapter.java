@@ -34,28 +34,12 @@ public class TransactionAdapter extends RecyclerView.Adapter<TransactionAdapter.
     @Override
     public void onBindViewHolder(@NonNull TransactionViewHolder holder, int position) {
         TransactionMessage transaction = transactionList.get(position);
-        
-        holder.senderNameTextView.setText(transaction.getSenderName());
-        holder.amountTextView.setText(transaction.getFormattedAmount());
-        holder.dateTextView.setText(transaction.getFormattedDate());
-        
-        // Display bank and account number info
-        String bankAccountInfo = transaction.getBankName() + " - " + 
-                transaction.getAccountNumber();
-        holder.bankAccountTextView.setText(bankAccountInfo);
-        
-        // Show message if exists
-        if (transaction.getMessage() != null && !transaction.getMessage().isEmpty()) {
-            holder.messageTextView.setText(transaction.getMessage());
-            holder.messageTextView.setVisibility(View.VISIBLE);
-        } else {
-            holder.messageTextView.setVisibility(View.GONE);
-        }
+        holder.messageTextView.setText(transaction.getMessage());
     }
 
     @Override
     public int getItemCount() {
-        return transactionList.size();
+        return transactionList != null ? transactionList.size() : 0;
     }
 
     public void updateData(List<TransactionMessage> newTransactions) {
@@ -63,19 +47,16 @@ public class TransactionAdapter extends RecyclerView.Adapter<TransactionAdapter.
         notifyDataSetChanged();
     }
 
-    public static class TransactionViewHolder extends RecyclerView.ViewHolder {
-        TextView senderNameTextView;
-        TextView amountTextView;
-        TextView dateTextView;
-        TextView bankAccountTextView;
+    public void addTransaction(TransactionMessage transaction) {
+        this.transactionList.add(0, transaction);
+        notifyItemInserted(0);
+    }
+
+    static class TransactionViewHolder extends RecyclerView.ViewHolder {
         TextView messageTextView;
 
-        public TransactionViewHolder(@NonNull View itemView) {
+        TransactionViewHolder(View itemView) {
             super(itemView);
-            senderNameTextView = itemView.findViewById(R.id.senderNameTextView);
-            amountTextView = itemView.findViewById(R.id.amountTextView);
-            dateTextView = itemView.findViewById(R.id.dateTextView);
-            bankAccountTextView = itemView.findViewById(R.id.bankAccountTextView);
             messageTextView = itemView.findViewById(R.id.messageTextView);
         }
     }

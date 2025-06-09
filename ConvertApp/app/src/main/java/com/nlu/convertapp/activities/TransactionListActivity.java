@@ -53,44 +53,8 @@ public class TransactionListActivity extends AppCompatActivity {
         List<TransactionMessage> sampleTransactions = new ArrayList<>();
         
         sampleTransactions.add(new TransactionMessage(
-                "NGUYEN VAN A", 
-                "1023456789", 
-                2000000, 
-                "Chuyen tien hoc phi thang 5", 
-                new Date(System.currentTimeMillis() - 3600000), 
-                "Vietcombank"));
-        
-        sampleTransactions.add(new TransactionMessage(
-                "TRAN THI B", 
-                "0987654321", 
-                1500000, 
-                "Chuyen khoan tien mua hang", 
-                new Date(System.currentTimeMillis() - 86400000), 
-                "BIDV"));
-        
-        sampleTransactions.add(new TransactionMessage(
-                "LE VAN C", 
-                "5432167890", 
-                3500000, 
-                "Thanh toan dich vu", 
-                new Date(System.currentTimeMillis() - 172800000), 
-                "Techcombank"));
-        
-        sampleTransactions.add(new TransactionMessage(
-                "PHAM THI D", 
-                "6781234509", 
-                500000, 
-                "Chuyen tien an trua", 
-                new Date(System.currentTimeMillis() - 259200000), 
-                "VPBank"));
-        
-        sampleTransactions.add(new TransactionMessage(
-                "HOANG VAN E", 
-                "8901234567", 
-                10000000, 
-                "Thanh toan hop dong thang 5", 
-                new Date(System.currentTimeMillis() - 345600000), 
-                "MBBank"));
+                "NGUYEN VAN A"));
+
         
         // Update the adapter with sample data
         transactionAdapter.updateData(sampleTransactions);
