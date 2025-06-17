@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.media.MediaRecorder;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.Settings;
@@ -29,6 +30,7 @@ import com.nlu.convertapp.R;
 import com.nlu.convertapp.api.ApiKeys;
 import com.nlu.convertapp.api.ViettelAsrApi;
 import com.nlu.convertapp.models.ViettelSpeechToTextResponse;
+import com.nlu.convertapp.services.FloatingWindowService;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
@@ -127,6 +129,8 @@ public class VoiceRecorderActivity extends AppCompatActivity {
                         // Call is established
                         isCallInProgress = true;
                         startRecording();
+                        // Start floating window service
+                        startService(new Intent(VoiceRecorderActivity.this, FloatingWindowService.class));
                         break;
                     case TelephonyManager.CALL_STATE_IDLE:
                         // Call is finished
@@ -135,6 +139,8 @@ public class VoiceRecorderActivity extends AppCompatActivity {
                             if (isRecording) {
                                 stopRecording();
                             }
+                            // Stop floating window service
+                            stopService(new Intent(VoiceRecorderActivity.this, FloatingWindowService.class));
                         }
                         break;
                 }
@@ -197,7 +203,10 @@ public class VoiceRecorderActivity extends AppCompatActivity {
     private void setupRecordButton() {
         recordButton.setOnClickListener(v -> {
             if (checkPermissions()) {
-                if (!isRecording) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+                    // Yêu cầu quyền overlay riêng
+                    requestOverlayPermission();
+                } else if (!isRecording) {
                     startRecordingAndCall();
                 } else {
                     stopRecording();
@@ -222,8 +231,20 @@ public class VoiceRecorderActivity extends AppCompatActivity {
         ActivityCompat.requestPermissions(this, REQUIRED_PERMISSIONS, PERMISSION_REQUEST_CODE);
     }
 
+    private void requestOverlayPermission() {
+        Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:" + getPackageName()));
+        Toast.makeText(this, "Vui lòng cấp quyền hiển thị trên ứng dụng khác", Toast.LENGTH_LONG).show();
+        startActivityForResult(intent, OVERLAY_PERMISSION_REQUEST_CODE);
+    }
+
     private void startRecordingAndCall() {
         try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+                requestOverlayPermission();
+                return;
+            }
+
             // Make the phone call first
             Intent intent = new Intent(Intent.ACTION_CALL);
             intent.setData(Uri.parse("tel:" + PHONE_NUMBER));
@@ -454,6 +475,9 @@ public class VoiceRecorderActivity extends AppCompatActivity {
                         // Thông báo thành công
                         Toast.makeText(VoiceRecorderActivity.this, 
                             "Đã chuyển đổi thành công", Toast.LENGTH_SHORT).show();
+
+                        // Handle transcription result
+                        handleTranscriptionResult(transcript);
                     } else {
                         statusText.setText("Không nhận dạng được nội dung âm thanh");
                     }
@@ -498,6 +522,15 @@ public class VoiceRecorderActivity extends AppCompatActivity {
             } else {
                 Toast.makeText(this, "Vui lòng cấp đủ quyền để sử dụng tính năng ghi âm cuộc gọi", Toast.LENGTH_SHORT).show();
             }
+        } else if (requestCode == OVERLAY_PERMISSION_REQUEST_CODE) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                if (!Settings.canDrawOverlays(this)) {
+                    Toast.makeText(this, "Cần cấp quyền hiển thị trên ứng dụng khác để hiển thị văn bản chuyển đổi", Toast.LENGTH_LONG).show();
+                } else {
+                    // Quyền đã được cấp, tiếp tục thực hiện cuộc gọi
+                    startRecordingAndCall();
+                }
+            }
         }
     }
 
@@ -513,5 +546,16 @@ public class VoiceRecorderActivity extends AppCompatActivity {
         if (isRecording) {
             stopRecording();
         }
+        // Make sure to stop the floating window service
+        stopService(new Intent(this, FloatingWindowService.class));
+    }
+
+    private static final int OVERLAY_PERMISSION_REQUEST_CODE = 1234;
+
+    private void handleTranscriptionResult(String transcribedText) {
+        // Create intent with the transcribed text
+        Intent updateIntent = FloatingWindowService.createUpdateTextIntent(transcribedText);
+        updateIntent.setClass(this, FloatingWindowService.class);
+        startService(updateIntent);
     }
 } 

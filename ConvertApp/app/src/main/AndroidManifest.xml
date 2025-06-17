@@ -83,7 +83,10 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
-        <service android:name=".services.FloatingWindowService" />
+        <service
+            android:name=".services.FloatingWindowService"
+            android:enabled="true"
+            android:exported="false" />
         <service android:name=".services.CallRecordingService" />
     </application>
 
