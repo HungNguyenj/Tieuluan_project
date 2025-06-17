@@ -34,6 +34,7 @@ public class MainActivity extends AppCompatActivity {
         MaterialButton textStorageButton = findViewById(R.id.textStorageButton);
         MaterialButton readBankTransactionButton = findViewById(R.id.readBankTransactionButton);
         MaterialButton phoneCallButton = findViewById(R.id.phoneCallButton);
+        MaterialButton voiceRecorderButton = findViewById(R.id.voiceRecorderButton);
 
         // Sự kiện onClick cho từng nút
         textToSpeechButton.setOnClickListener(v -> {
@@ -58,6 +59,11 @@ public class MainActivity extends AppCompatActivity {
 
         phoneCallButton.setOnClickListener(v -> {
             Intent intent = new Intent(MainActivity.this, PhoneDialerActivity.class);
+            startActivity(intent);
+        });
+
+        voiceRecorderButton.setOnClickListener(v -> {
+            Intent intent = new Intent(MainActivity.this, VoiceRecorderActivity.class);
             startActivity(intent);
         });
     }

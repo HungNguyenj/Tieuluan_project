@@ -4,6 +4,7 @@ import android.app.Notification;
 import android.content.ComponentName;
 import android.content.Intent;
 import android.media.MediaPlayer;
+import android.os.Build;
 import android.os.IBinder;
 import android.service.notification.StatusBarNotification;
 import android.util.Log;
@@ -99,7 +100,9 @@ public class NotificationListenerService extends android.service.notification.No
         super.onListenerDisconnected();
         Log.d(TAG, "Notification Listener disconnected");
         // Try to reconnect
-        requestRebind(new ComponentName(this, NotificationListenerService.class));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            requestRebind(new ComponentName(this, NotificationListenerService.class));
+        }
     }
     
     private void setupViettelApi() {
