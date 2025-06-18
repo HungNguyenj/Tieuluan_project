@@ -45,12 +45,6 @@
             android:name=".activities.VoiceRecorderActivity"
             android:exported="false" />
         <activity
-            android:name=".activities.PhoneDialerActivity"
-            android:exported="false" />
-        <activity
-            android:name=".activities.PhoneCallActivity"
-            android:exported="false" />
-        <activity
             android:name=".activities.TransactionListActivity"
             android:exported="false" />
         <activity

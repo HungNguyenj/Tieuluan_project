@@ -12,36 +12,31 @@ import android.os.Environment;
 import android.provider.Settings;
 import android.telephony.PhoneStateListener;
 import android.telephony.TelephonyManager;
+import android.text.TextUtils;
 import android.util.Log;
-import android.view.View;
+import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
-import com.google.gson.Gson;
 import com.nlu.convertapp.R;
 import com.nlu.convertapp.api.ApiKeys;
 import com.nlu.convertapp.api.ViettelAsrApi;
 import com.nlu.convertapp.models.ViettelSpeechToTextResponse;
 import com.nlu.convertapp.services.FloatingWindowService;
 
-import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.security.cert.X509Certificate;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Date;
-import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
@@ -59,13 +54,10 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
-import android.media.MediaExtractor;
-import android.media.MediaFormat;
+
 import android.media.AudioFormat;
 import android.media.AudioRecord;
-import android.media.AudioTrack;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
+
 import java.io.RandomAccessFile;
 
 public class VoiceRecorderActivity extends AppCompatActivity {
@@ -80,17 +72,19 @@ public class VoiceRecorderActivity extends AppCompatActivity {
         Manifest.permission.WRITE_EXTERNAL_STORAGE,
         Manifest.permission.READ_EXTERNAL_STORAGE
     };
-    private static final String PHONE_NUMBER = "5556";
     private static final String VIETTEL_API_URL = "https://viettelai.vn/";
     private static final String VIETTEL_TOKEN = ApiKeys.VIETTEL_TOKEN;
-    private static final int SAMPLE_RATE = 16000; // 16kHz for voice
+    private static final int SAMPLE_RATE = 16000;
     private static final int CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO;
     private static final int AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT;
+    private static final int OVERLAY_PERMISSION_REQUEST_CODE = 1234;
+    private static final int SEGMENT_DURATION = 3000;
 
     private MediaRecorder mediaRecorder;
     private boolean isRecording = false;
     private String currentRecordingFile;
-    private ImageButton recordButton;
+    private ImageButton callButton;
+    private EditText phoneNumberInput;
     private TextView statusText;
     private TelephonyManager telephonyManager;
     private PhoneStateListener phoneStateListener;
@@ -98,6 +92,9 @@ public class VoiceRecorderActivity extends AppCompatActivity {
     private ViettelAsrApi viettelAsrApi;
     private AudioRecord audioRecord;
     private Thread recordingThread = null;
+    private long recordingStartTime;
+    private File recordingDir;
+    private int totalBytesRead = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -107,17 +104,24 @@ public class VoiceRecorderActivity extends AppCompatActivity {
         // Initialize telephony manager
         telephonyManager = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
 
+        // Initialize recording directory
+        recordingDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "CallRecordings");
+        if (!recordingDir.exists()) {
+            recordingDir.mkdirs();
+        }
+
         // Initialize views
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
         toolbar.setNavigationOnClickListener(v -> finish());
 
-        recordButton = findViewById(R.id.recordButton);
+        callButton = findViewById(R.id.callButton);
+        phoneNumberInput = findViewById(R.id.phoneNumberInput);
         statusText = findViewById(R.id.statusText);
 
         setupViettelApi();
         setupPhoneStateListener();
-        setupRecordButton();
+        setupCallButton();
     }
 
     private void setupPhoneStateListener() {
@@ -200,16 +204,18 @@ public class VoiceRecorderActivity extends AppCompatActivity {
         viettelAsrApi = retrofit.create(ViettelAsrApi.class);
     }
 
-    private void setupRecordButton() {
-        recordButton.setOnClickListener(v -> {
+    private void setupCallButton() {
+        callButton.setOnClickListener(v -> {
             if (checkPermissions()) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-                    // Yêu cầu quyền overlay riêng
                     requestOverlayPermission();
-                } else if (!isRecording) {
-                    startRecordingAndCall();
                 } else {
-                    stopRecording();
+                    String phoneNumber = phoneNumberInput.getText().toString().trim();
+                    if (TextUtils.isEmpty(phoneNumber)) {
+                        Toast.makeText(this, "Vui lòng nhập số điện thoại", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    startRecordingAndCall(phoneNumber);
                 }
             } else {
                 requestPermissions();
@@ -238,21 +244,21 @@ public class VoiceRecorderActivity extends AppCompatActivity {
         startActivityForResult(intent, OVERLAY_PERMISSION_REQUEST_CODE);
     }
 
-    private void startRecordingAndCall() {
+    private void startRecordingAndCall(String phoneNumber) {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
                 requestOverlayPermission();
                 return;
             }
 
-            // Make the phone call first
+            // Make the phone call
             Intent intent = new Intent(Intent.ACTION_CALL);
-            intent.setData(Uri.parse("tel:" + PHONE_NUMBER));
+            intent.setData(Uri.parse("tel:" + phoneNumber));
             startActivity(intent);
 
             // Recording will start automatically when call is connected (via PhoneStateListener)
             statusText.setText("Đang kết nối cuộc gọi...");
-            recordButton.setImageResource(R.drawable.ic_fa_microphone);
+            callButton.setEnabled(false);
 
         } catch (Exception e) {
             Log.e(TAG, "Error making phone call", e);
@@ -263,19 +269,10 @@ public class VoiceRecorderActivity extends AppCompatActivity {
     @SuppressLint("MissingPermission")
     private void startRecording() {
         try {
-            String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
-                    .format(new Date());
-            File downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-            if (!downloadDir.exists()) {
-                downloadDir.mkdirs();
-            }
-            // Ghi trực tiếp thành file WAV
-            currentRecordingFile = new File(downloadDir, "call_recording_" + timestamp + ".wav").getAbsolutePath();
-
             // Tính buffer size
             int minBufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT);
             if (minBufferSize == AudioRecord.ERROR || minBufferSize == AudioRecord.ERROR_BAD_VALUE) {
-                minBufferSize = SAMPLE_RATE * 2; // 2 bytes per short
+                minBufferSize = SAMPLE_RATE * 2;
             }
 
             // Khởi tạo AudioRecord
@@ -289,39 +286,59 @@ public class VoiceRecorderActivity extends AppCompatActivity {
             // Bắt đầu ghi âm
             audioRecord.startRecording();
             isRecording = true;
+            recordingStartTime = System.currentTimeMillis();
 
-            // Tạo file WAV và ghi header
-            DataOutputStream dos = new DataOutputStream(new FileOutputStream(currentRecordingFile));
-            // Viết WAV header trống, sẽ update sau
-            writeWavHeader(dos, CHANNEL_CONFIG == AudioFormat.CHANNEL_IN_MONO ? 1 : 2, SAMPLE_RATE);
+            // Tạo file WAV đầu tiên
+            startNewRecordingSegment();
 
             // Bắt đầu thread ghi âm
             int finalMinBufferSize = minBufferSize;
             recordingThread = new Thread(() -> {
                 byte[] buffer = new byte[finalMinBufferSize];
-                while (isRecording) {
-                    int read = audioRecord.read(buffer, 0, buffer.length);
-                    if (read > 0) {
-                        try {
+                DataOutputStream dos = null;
+
+                try {
+                    dos = new DataOutputStream(new FileOutputStream(currentRecordingFile));
+                    writeWavHeader(dos, CHANNEL_CONFIG == AudioFormat.CHANNEL_IN_MONO ? 1 : 2, SAMPLE_RATE);
+                    totalBytesRead = 0;
+
+                    while (isRecording) {
+                        int read = audioRecord.read(buffer, 0, buffer.length);
+                        if (read > 0) {
                             dos.write(buffer, 0, read);
-                        } catch (IOException e) {
-                            Log.e(TAG, "Error writing audio data", e);
-                            break;
+                            totalBytesRead += read;
+
+                            // Kiểm tra thời gian ghi âm
+                            long currentTime = System.currentTimeMillis();
+                            if (currentTime - recordingStartTime >= SEGMENT_DURATION) {
+                                // Đóng file hiện tại và cập nhật header
+                                finishCurrentSegment(dos);
+                                
+                                // Chuyển đổi đoạn vừa ghi
+                                final String completedFile = currentRecordingFile;
+                                convertAudioSegment(new File(completedFile));
+
+                                // Bắt đầu segment mới
+                                dos = startNewRecordingSegment();
+                                totalBytesRead = 0;
+                                recordingStartTime = System.currentTimeMillis();
+                            }
                         }
                     }
-                }
 
-                // Đóng file và cập nhật WAV header
-                try {
-                    dos.close();
-                    updateWavHeader(currentRecordingFile);
+                    // Kết thúc segment cuối cùng
+                    if (dos != null) {
+                        finishCurrentSegment(dos);
+                        convertAudioSegment(new File(currentRecordingFile));
+                    }
+
                 } catch (IOException e) {
-                    Log.e(TAG, "Error closing output file", e);
+                    Log.e(TAG, "Error writing audio data", e);
                 }
             }, "AudioRecorder Thread");
 
             recordingThread.start();
-            recordButton.setImageResource(R.drawable.ic_fa_microphone);
+            callButton.setEnabled(false);
             statusText.setText("Đang ghi âm cuộc gọi...");
             Toast.makeText(this, "Bắt đầu ghi âm", Toast.LENGTH_SHORT).show();
 
@@ -333,34 +350,102 @@ public class VoiceRecorderActivity extends AppCompatActivity {
         }
     }
 
+    private DataOutputStream startNewRecordingSegment() throws IOException {
+        String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
+                .format(new Date());
+        currentRecordingFile = new File(recordingDir, "call_" + timestamp + ".wav").getAbsolutePath();
+        
+        DataOutputStream dos = new DataOutputStream(new FileOutputStream(currentRecordingFile));
+        writeWavHeader(dos, CHANNEL_CONFIG == AudioFormat.CHANNEL_IN_MONO ? 1 : 2, SAMPLE_RATE);
+        return dos;
+    }
+
+    private void finishCurrentSegment(DataOutputStream dos) throws IOException {
+        dos.close();
+        updateWavHeader(currentRecordingFile, totalBytesRead);
+    }
+
+    private void updateWavHeader(String filePath, int audioDataLength) throws IOException {
+        RandomAccessFile raf = new RandomAccessFile(filePath, "rw");
+        
+        // Update ChunkSize
+        raf.seek(4);
+        raf.writeInt(Integer.reverseBytes(36 + audioDataLength));
+        
+        // Update Subchunk2Size
+        raf.seek(40);
+        raf.writeInt(Integer.reverseBytes(audioDataLength));
+        
+        raf.close();
+    }
+
+    private void convertAudioSegment(final File audioFile) {
+        if (!audioFile.exists() || audioFile.length() == 0) {
+            Log.e(TAG, "Invalid audio file: " + audioFile.getAbsolutePath());
+            return;
+        }
+
+        RequestBody fileBody = RequestBody.create(MediaType.parse("audio/wav"), audioFile);
+        MultipartBody.Part filePart = MultipartBody.Part.createFormData("file", 
+                audioFile.getName(), fileBody);
+        RequestBody tokenBody = RequestBody.create(MediaType.parse("text/plain"), VIETTEL_TOKEN);
+
+        Call<ViettelSpeechToTextResponse> call = viettelAsrApi.convertSpeechToText(filePart, tokenBody);
+        call.enqueue(new Callback<ViettelSpeechToTextResponse>() {
+            @Override
+            public void onResponse(Call<ViettelSpeechToTextResponse> call, 
+                    Response<ViettelSpeechToTextResponse> response) {
+                
+                if (!response.isSuccessful()) {
+                    Log.e(TAG, "API error: " + response.code());
+                    return;
+                }
+
+                ViettelSpeechToTextResponse sttResponse = response.body();
+                if (sttResponse != null && sttResponse.getResponse() != null && 
+                        sttResponse.getResponse().getResult() != null && 
+                        !sttResponse.getResponse().getResult().isEmpty()) {
+                    
+                    ViettelSpeechToTextResponse.TranscriptResult result = 
+                            sttResponse.getResponse().getResult().get(0);
+                    String transcript = result.getTranscript();
+                    
+                    if (transcript != null && !transcript.trim().isEmpty()) {
+                        handleTranscriptionResult(transcript);
+                    }
+                }
+            }
+
+            @Override
+            public void onFailure(Call<ViettelSpeechToTextResponse> call, Throwable t) {
+                Log.e(TAG, "API call failed", t);
+            }
+        });
+    }
+
     private void stopRecording() {
-        try {
-            isRecording = false;
-            
-            if (recordingThread != null) {
+        isRecording = false;
+        if (recordingThread != null) {
+            try {
                 recordingThread.join();
                 recordingThread = null;
+            } catch (InterruptedException e) {
+                Log.e(TAG, "Error stopping recording thread", e);
             }
+        }
 
-            if (audioRecord != null) {
-                if (audioRecord.getState() == AudioRecord.STATE_INITIALIZED) {
-                    audioRecord.stop();
-                }
+        if (audioRecord != null) {
+            try {
+                audioRecord.stop();
                 audioRecord.release();
                 audioRecord = null;
+            } catch (Exception e) {
+                Log.e(TAG, "Error releasing AudioRecord", e);
             }
-
-            recordButton.setImageResource(R.drawable.ic_fa_microphone);
-            statusText.setText("Đã dừng ghi âm. Đang chuyển đổi thành văn bản...");
-
-            // Gửi file WAV trực tiếp lên API
-            convertAudioToText();
-
-        } catch (Exception e) {
-            Log.e(TAG, "Error stopping recording", e);
-            Toast.makeText(this, "Lỗi khi dừng ghi âm: " + e.getMessage(), 
-                    Toast.LENGTH_SHORT).show();
         }
+
+        callButton.setEnabled(true);
+        statusText.setText("Ghi âm đã kết thúc");
     }
 
     private void writeWavHeader(DataOutputStream dos, int channels, int sampleRate) throws IOException {
@@ -382,116 +467,6 @@ public class VoiceRecorderActivity extends AppCompatActivity {
         // data subchunk
         dos.writeBytes("data"); // Subchunk2ID
         dos.writeInt(0); // Subchunk2Size (will be updated later)
-    }
-
-    private void updateWavHeader(String filePath) throws IOException {
-        RandomAccessFile raf = new RandomAccessFile(filePath, "rw");
-        long fileSize = raf.length();
-        
-        // Update ChunkSize
-        raf.seek(4);
-        raf.writeInt(Integer.reverseBytes((int) (fileSize - 8)));
-        
-        // Update Subchunk2Size
-        raf.seek(40);
-        raf.writeInt(Integer.reverseBytes((int) (fileSize - 44)));
-        
-        raf.close();
-    }
-
-    private void convertAudioToText() {
-        File audioFile = new File(currentRecordingFile);
-        
-        // Kiểm tra file tồn tại và kích thước
-        if (!audioFile.exists()) {
-            Log.e(TAG, "Audio file does not exist: " + currentRecordingFile);
-            statusText.setText("Lỗi: File ghi âm không tồn tại");
-            return;
-        }
-        
-        if (audioFile.length() == 0) {
-            Log.e(TAG, "Audio file is empty: " + currentRecordingFile);
-            statusText.setText("Lỗi: File ghi âm trống");
-            return;
-        }
-
-        Log.d(TAG, "Converting audio file: " + audioFile.getAbsolutePath());
-        Log.d(TAG, "File size: " + audioFile.length() + " bytes");
-
-        // Gửi file WAV trực tiếp lên API
-        RequestBody fileBody = RequestBody.create(MediaType.parse("audio/wav"), audioFile);
-        MultipartBody.Part filePart = MultipartBody.Part.createFormData("file", 
-                audioFile.getName(), fileBody);
-        RequestBody tokenBody = RequestBody.create(MediaType.parse("text/plain"), VIETTEL_TOKEN);
-
-        // Log request details
-        Log.d(TAG, "Request details:");
-        Log.d(TAG, "File name: " + audioFile.getName());
-        Log.d(TAG, "Content type: audio/wav");
-        Log.d(TAG, "Token: " + VIETTEL_TOKEN);
-
-        Call<ViettelSpeechToTextResponse> call = viettelAsrApi.convertSpeechToText(filePart, tokenBody);
-        call.enqueue(new Callback<ViettelSpeechToTextResponse>() {
-            @Override
-            public void onResponse(Call<ViettelSpeechToTextResponse> call, 
-                    Response<ViettelSpeechToTextResponse> response) {
-                
-                // Log response details
-                Log.d(TAG, "Response code: " + response.code());
-                if (!response.isSuccessful()) {
-                    try {
-                        String errorBody = response.errorBody() != null ? 
-                            response.errorBody().string() : "Unknown error";
-                        Log.e(TAG, "Error response: " + errorBody);
-                        statusText.setText("Lỗi API (" + response.code() + "): " + errorBody);
-                    } catch (IOException e) {
-                        Log.e(TAG, "Error reading error response", e);
-                        statusText.setText("Lỗi API: " + response.code());
-                    }
-                    return;
-                }
-
-                ViettelSpeechToTextResponse sttResponse = response.body();
-                if (sttResponse != null) {
-                    Log.d(TAG, "API Response: " + new Gson().toJson(sttResponse));
-                    
-                    if (sttResponse.getResponse() != null && 
-                            sttResponse.getResponse().getResult() != null && 
-                            !sttResponse.getResponse().getResult().isEmpty()) {
-                        
-                        ViettelSpeechToTextResponse.TranscriptResult result = 
-                                sttResponse.getResponse().getResult().get(0);
-                        String transcript = result.getTranscript();
-                        double confidence = result.getConfidence();
-
-                        Log.d(TAG, "Transcript: " + transcript);
-                        Log.d(TAG, "Confidence: " + confidence);
-
-                        String displayText = "Nội dung cuộc gọi:\n" + transcript + 
-                                "\nĐộ tin cậy: " + String.format("%.2f%%", confidence * 100) +
-                                "\n\nFile ghi âm đã được lưu tại: " + currentRecordingFile;
-                        statusText.setText(displayText);
-                        
-                        // Thông báo thành công
-                        Toast.makeText(VoiceRecorderActivity.this, 
-                            "Đã chuyển đổi thành công", Toast.LENGTH_SHORT).show();
-
-                        // Handle transcription result
-                        handleTranscriptionResult(transcript);
-                    } else {
-                        statusText.setText("Không nhận dạng được nội dung âm thanh");
-                    }
-                } else {
-                    statusText.setText("Không nhận được phản hồi từ server");
-                }
-            }
-
-            @Override
-            public void onFailure(Call<ViettelSpeechToTextResponse> call, Throwable t) {
-                Log.e(TAG, "API call failed", t);
-                statusText.setText("Lỗi kết nối: " + t.getMessage());
-            }
-        });
     }
 
     @Override
@@ -528,7 +503,12 @@ public class VoiceRecorderActivity extends AppCompatActivity {
                     Toast.makeText(this, "Cần cấp quyền hiển thị trên ứng dụng khác để hiển thị văn bản chuyển đổi", Toast.LENGTH_LONG).show();
                 } else {
                     // Quyền đã được cấp, tiếp tục thực hiện cuộc gọi
-                    startRecordingAndCall();
+                    String phoneNumber = phoneNumberInput.getText().toString().trim();
+                    if (TextUtils.isEmpty(phoneNumber)) {
+                        Toast.makeText(this, "Vui lòng nhập số điện thoại", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    startRecordingAndCall(phoneNumber);
                 }
             }
         }
@@ -549,8 +529,6 @@ public class VoiceRecorderActivity extends AppCompatActivity {
         // Make sure to stop the floating window service
         stopService(new Intent(this, FloatingWindowService.class));
     }
-
-    private static final int OVERLAY_PERMISSION_REQUEST_CODE = 1234;
 
     private void handleTranscriptionResult(String transcribedText) {
         // Create intent with the transcribed text

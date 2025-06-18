@@ -57,11 +57,6 @@ public class MainActivity extends AppCompatActivity {
             startActivity(intent);
         });
 
-        phoneCallButton.setOnClickListener(v -> {
-            Intent intent = new Intent(MainActivity.this, PhoneDialerActivity.class);
-            startActivity(intent);
-        });
-
         voiceRecorderButton.setOnClickListener(v -> {
             Intent intent = new Intent(MainActivity.this, VoiceRecorderActivity.class);
             startActivity(intent);
