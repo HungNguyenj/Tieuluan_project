@@ -2,8 +2,6 @@ package com.nlu.convertapp.activities;
 
 import android.content.Intent;
 import android.os.Bundle;
-import android.widget.Button;
-import android.view.View;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
@@ -28,15 +26,13 @@ public class MainActivity extends AppCompatActivity {
         });
 
 
-        // Khai báo các nút
+        //button
         MaterialButton textToSpeechButton = findViewById(R.id.textToSpeechButton);
         MaterialButton speechToTextButton = findViewById(R.id.speechToTextButton);
         MaterialButton textStorageButton = findViewById(R.id.textStorageButton);
         MaterialButton readBankTransactionButton = findViewById(R.id.readBankTransactionButton);
-        MaterialButton phoneCallButton = findViewById(R.id.phoneCallButton);
-        MaterialButton voiceRecorderButton = findViewById(R.id.voiceRecorderButton);
+        MaterialButton phoneCallRecorderButton = findViewById(R.id.voiceRecorderButton);
 
-        // Sự kiện onClick cho từng nút
         textToSpeechButton.setOnClickListener(v -> {
             Intent intent = new Intent(MainActivity.this, TextToSpeechActivity.class);
             startActivity(intent);
@@ -57,8 +53,8 @@ public class MainActivity extends AppCompatActivity {
             startActivity(intent);
         });
 
-        voiceRecorderButton.setOnClickListener(v -> {
-            Intent intent = new Intent(MainActivity.this, VoiceRecorderActivity.class);
+        phoneCallRecorderButton.setOnClickListener(v -> {
+            Intent intent = new Intent(MainActivity.this, PhoneCallRecorderActivity.class);
             startActivity(intent);
         });
     }

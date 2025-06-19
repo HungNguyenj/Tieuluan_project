@@ -15,7 +15,6 @@ import com.nlu.convertapp.adapters.TransactionAdapter;
 import com.nlu.convertapp.models.TransactionMessage;
 
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 
 public class TransactionListActivity extends AppCompatActivity {
@@ -35,28 +34,23 @@ public class TransactionListActivity extends AppCompatActivity {
             return insets;
         });
 
-        // Initialize UI components
         transactionRecyclerView = findViewById(R.id.transactionRecyclerView);
-        
-        // Set up RecyclerView
+
         transactionList = new ArrayList<>();
         transactionAdapter = new TransactionAdapter(this, transactionList);
         transactionRecyclerView.setLayoutManager(new LinearLayoutManager(this));
         transactionRecyclerView.setAdapter(transactionAdapter);
-        
-        // Load sample transaction data
+
         loadSampleTransactions();
     }
     
     private void loadSampleTransactions() {
-        // Sample transaction data for demonstration
         List<TransactionMessage> sampleTransactions = new ArrayList<>();
         
         sampleTransactions.add(new TransactionMessage(
                 "NGUYEN VAN A"));
 
         
-        // Update the adapter with sample data
         transactionAdapter.updateData(sampleTransactions);
     }
 } 

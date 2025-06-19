@@ -1,5 +1,6 @@
 package com.nlu.convertapp.repository;
 
+import android.annotation.SuppressLint;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
@@ -51,9 +52,9 @@ public class TextStorageRepository {
 
         if (cursor != null && cursor.moveToFirst()) {
             do {
-                String date = cursor.getString(cursor.getColumnIndex(DatabaseHelper.COLUMN_DATE));
-                String content = cursor.getString(cursor.getColumnIndex(DatabaseHelper.COLUMN_CONTENT));
-                boolean starred = cursor.getInt(cursor.getColumnIndex(DatabaseHelper.COLUMN_STARRED)) == 1;
+                @SuppressLint("Range") String date = cursor.getString(cursor.getColumnIndex(DatabaseHelper.COLUMN_DATE));
+                @SuppressLint("Range") String content = cursor.getString(cursor.getColumnIndex(DatabaseHelper.COLUMN_CONTENT));
+                @SuppressLint("Range") boolean starred = cursor.getInt(cursor.getColumnIndex(DatabaseHelper.COLUMN_STARRED)) == 1;
 
                 items.add(new TextStorageItem(date, content, starred));
             } while (cursor.moveToNext());
@@ -101,8 +102,8 @@ public class TextStorageRepository {
 
         if (cursor != null && cursor.moveToFirst()) {
             do {
-                String date = cursor.getString(cursor.getColumnIndex(DatabaseHelper.COLUMN_DATE));
-                String content = cursor.getString(cursor.getColumnIndex(DatabaseHelper.COLUMN_CONTENT));
+                @SuppressLint("Range") String date = cursor.getString(cursor.getColumnIndex(DatabaseHelper.COLUMN_DATE));
+                @SuppressLint("Range") String content = cursor.getString(cursor.getColumnIndex(DatabaseHelper.COLUMN_CONTENT));
                 boolean starred = true;
 
                 items.add(new TextStorageItem(date, content, starred));

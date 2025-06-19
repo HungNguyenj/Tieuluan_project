@@ -8,6 +8,7 @@ import android.os.Build;
 import android.os.IBinder;
 import android.service.notification.StatusBarNotification;
 import android.util.Log;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import com.google.gson.Gson;
 import com.nlu.convertapp.api.ApiKeys;
@@ -24,6 +25,8 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
@@ -39,8 +42,7 @@ public class NotificationListenerService extends android.service.notification.No
     
     private static final String TAG = "NotificationListener";
     public static final String ACTION_NOTIFICATION_LISTENER = "com.nlu.convertapp.NOTIFICATION_LISTENER";
-    
-    // Viettel TTS constants
+
     private static final String VIETTEL_BASE_URL = "https://viettelai.vn/";
     private static final String VIETTEL_TOKEN = ApiKeys.VIETTEL_TOKEN;
     private static final String VIETTEL_VOICE = ApiKeys.VIETTEL_VOICE;
@@ -52,7 +54,7 @@ public class NotificationListenerService extends android.service.notification.No
     private MediaPlayer mediaPlayer;
     private File cacheDir;
     
-    // List of bank and payment app packages to monitor
+    // list bank
     private final Map<String, String> monitoredPackages = new HashMap<>();
     
     @Override
@@ -61,18 +63,16 @@ public class NotificationListenerService extends android.service.notification.No
         Log.d(TAG, "Notification Listener Service created");
         
         // Initialize the packages to monitor
-        monitoredPackages.put("com.vietcombank.vcbmobile", "Vietcombank");
-        monitoredPackages.put("vn.com.bidv.smartbanking", "BIDV");
-        monitoredPackages.put("vn.tpb.mb.gprsandroid", "TPBank");
-        monitoredPackages.put("com.techcombank.mobileone", "Techcombank");
-        monitoredPackages.put("com.VPB", "VPBank");
+        monitoredPackages.put("com.VCB", "Vietcombank");
+        monitoredPackages.put("com.vnpay.bidv", "BIDV");
+        monitoredPackages.put("vn.com.techcombank.bb.app", "Techcombank");
         monitoredPackages.put("com.vnpay.hdbank", "HDBank");
         monitoredPackages.put("com.mbmobile", "MBBank");
-        monitoredPackages.put("com.vnpay.agribank", "Agribank");
+        monitoredPackages.put("com.vnpay.Agribank3g", "Agribank");
         monitoredPackages.put("com.mservice.momotransfer", "Momo");
-        monitoredPackages.put("com.samsung.android.messaging", "SMS");
-        monitoredPackages.put("com.android.messaging", "SMS");
-        monitoredPackages.put("com.google.android.apps.messaging", "SMS");
+//        monitoredPackages.put("com.samsung.android.messaging", "SMS");
+//        monitoredPackages.put("com.android.messaging", "SMS");
+//        monitoredPackages.put("com.google.android.apps.messaging", "SMS");
         
         // Initialize Viettel TTS API
         setupViettelApi();
@@ -146,20 +146,26 @@ public class NotificationListenerService extends android.service.notification.No
                     String text = notification.extras.getString(Notification.EXTRA_TEXT);
                     
                     if (title != null && text != null) {
-                        // Format the notification message
+                        // format date
                         SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
                         String timestamp = sdf.format(new Date());
-                        String formattedMessage = String.format("[%s] %s - %s: %s", timestamp, bankName, title, text);
+
+                        //format money
+                        String amountStr = extractAmount(text);
+                        amountStr = amountStr != null ? "Số tiền " + amountStr + " VND" : text;
+
+                        String formattedMessage = String.format("[%s] %s - %s: %s", timestamp, bankName, title, amountStr);
                         
                         Log.d(TAG, "Broadcasting message: " + formattedMessage);
                         
-                        // Broadcast the message
+                        // Them thong bao vao giao dien read bank
                         Intent intent = new Intent(ACTION_NOTIFICATION_LISTENER);
                         intent.putExtra("message", formattedMessage);
-                        sendBroadcast(intent);
+                        LocalBroadcastManager.getInstance(this).sendBroadcast(intent);
+                        Log.d(TAG, "Broadcast sent via LocalBroadcastManager");
                         
-                        // Process for speech
-                        processAndSpeakNotification(bankName, title, text);
+                        // TTS
+                        processAndSpeakNotification(bankName, title, amountStr);
                     }
                 }
             } catch (Exception e) {
@@ -170,6 +176,7 @@ public class NotificationListenerService extends android.service.notification.No
     
     private void processAndSpeakNotification(String bankName, String title, String text) {
         String messageToSpeak = String.format("Thông báo từ %s. %s. %s", bankName, title, text);
+        Log.d(TAG, "Processing notification for speech: " + messageToSpeak);
         
         // Create Viettel TTS request
         ViettelTtsRequest ttsRequest = new ViettelTtsRequest(
@@ -220,24 +227,23 @@ public class NotificationListenerService extends android.service.notification.No
             }
             outputStream.flush();
             
-            // Play the audio
+            //play audio
             playAudio(audioFile);
         }
     }
     
     private void playAudio(File audioFile) {
         try {
-            // Reset MediaPlayer
+            // reset
             mediaPlayer.reset();
-            
-            // Set the audio file as data source
+
             mediaPlayer.setDataSource(audioFile.getPath());
             
-            // Prepare and start playback
+            // prepare and start playback
             mediaPlayer.prepare();
             mediaPlayer.start();
             
-            // Delete the file after playback
+            // delete after play
             mediaPlayer.setOnCompletionListener(mp -> {
                 audioFile.delete();
             });
@@ -258,5 +264,25 @@ public class NotificationListenerService extends android.service.notification.No
     @Override
     public IBinder onBind(Intent intent) {
         return super.onBind(intent);
+    }
+
+    // Trich xuat so tien tu giao dich
+    public static String extractAmount(String notificationText) {
+        String[] lines = notificationText.split("\n");
+
+        for (String line : lines) {
+            if (line.toLowerCase().contains("số tiền") || line.toLowerCase().contains("amount")) {
+
+                Pattern pattern = Pattern.compile("([-+]?\\s?[0-9]{1,3}(,[0-9]{3})*(\\.[0-9]+)?)\\sVND");
+                Matcher matcher = pattern.matcher(line);
+
+                if (matcher.find()) {
+                    String amountStr = matcher.group(1); // Lay so tien
+                    amountStr = amountStr.replace(",", "").replace(" ", "");
+                    return amountStr;
+                }
+            }
+        }
+        return null;
     }
 } 

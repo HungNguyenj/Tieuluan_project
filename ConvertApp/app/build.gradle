@@ -43,6 +43,8 @@ dependencies {
     // Remove any old support library dependencies
     // implementation 'com.android.support:support-v4:22.2.1' // Remove this line if it exists
     
+    implementation 'androidx.localbroadcastmanager:localbroadcastmanager:1.1.0'
+    
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'

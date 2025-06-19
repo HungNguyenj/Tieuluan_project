@@ -51,14 +51,14 @@ import retrofit2.converter.gson.GsonConverterFactory;
 
 public class TextToSpeechActivity extends AppCompatActivity {
 
-    // ElevenLabs API constants
+    //elevenlabs
     private static final String ELEVENLABS_API_KEY = ApiKeys.ELEVENLABS_API_KEY;
     private static final String ELEVENLABS_BASE_URL = "https://api.elevenlabs.io/";
     private static final String ELEVENLABS_VOICE_ID = ApiKeys.ELEVENLABS_VOICE_ID;
     private static final String ELEVENLABS_OUTPUT_FORMAT = ApiKeys.ELEVENLABS_OUTPUT_FORMAT;
     private static final String ELEVENLABS_MODEL_ID = "eleven_multilingual_v2";
 
-    // Viettel AI TTS constants
+    //viettel
     private static final String VIETTEL_BASE_URL = "https://viettelai.vn/";
     private static final String VIETTEL_TOKEN = ApiKeys.VIETTEL_TOKEN;
     private static final String VIETTEL_VOICE = ApiKeys.VIETTEL_VOICE;
@@ -66,7 +66,6 @@ public class TextToSpeechActivity extends AppCompatActivity {
     private static final int VIETTEL_RETURN_OPTION = 3;
     private static final boolean VIETTEL_WITHOUT_FILTER = false;
 
-    // Language constants
     private static final int LANGUAGE_ENGLISH = 0;
     private static final int LANGUAGE_VIETNAMESE = 1;
     private int currentLanguage = LANGUAGE_ENGLISH;
@@ -74,14 +73,10 @@ public class TextToSpeechActivity extends AppCompatActivity {
     Toolbar toolbar;
     private Spinner languageSpinner;
     private EditText textArea;
-
-    // Bottom buttons
     private ImageButton fileButton;
     private ImageButton copyButton;
     private ImageButton starButton;
     private MaterialButton convertButton;
-
-    // Audio player controls
     private ImageButton playPauseButton;
     private TextView currentTime;
     private TextView totalTime;
@@ -107,7 +102,7 @@ public class TextToSpeechActivity extends AppCompatActivity {
             return insets;
         });
 
-        // Initialize repository
+        //repository
         textStorageRepository = new TextStorageRepository(this);
         textStorageRepository.open();
 
@@ -118,7 +113,6 @@ public class TextToSpeechActivity extends AppCompatActivity {
 
         toolbar.setNavigationOnClickListener(v -> finish());
 
-        // Setup language spinner listener
         languageSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
@@ -131,10 +125,7 @@ public class TextToSpeechActivity extends AppCompatActivity {
             }
         });
 
-        // Xử lý sự kiện cho các nút
         setupButtonListeners();
-
-        // Xử lý sự kiện cho audio seekbar
         setupAudioSeekBar();
     }
 
@@ -145,42 +136,31 @@ public class TextToSpeechActivity extends AppCompatActivity {
                 .writeTimeout(60, TimeUnit.SECONDS)
                 .build();
 
-        // Setup ElevenLabs API
+        //elevenlabs
         Retrofit elevenLabsRetrofit = new Retrofit.Builder()
                 .baseUrl(ELEVENLABS_BASE_URL)
                 .client(client)
                 .addConverterFactory(GsonConverterFactory.create())
                 .build();
-
         elevenLabsApi = elevenLabsRetrofit.create(ElevenLabsApi.class);
 
-        // Setup Viettel AI API
+        //viettel ai
         Retrofit viettelRetrofit = new Retrofit.Builder()
                 .baseUrl(VIETTEL_BASE_URL)
                 .client(client)
                 .addConverterFactory(GsonConverterFactory.create())
                 .build();
-
         viettelAiApi = viettelRetrofit.create(ViettelAiApi.class);
     }
 
     private void initializeViews() {
-        // Toolbar
         toolbar = findViewById(R.id.toolbar);
-
-        // Language spinner
         languageSpinner = findViewById(R.id.languageSpinner);
-
-        // Text area
         textArea = findViewById(R.id.textArea);
-
-        // Bottom buttons
         fileButton = findViewById(R.id.fileButton);
         copyButton = findViewById(R.id.copyButton);
         starButton = findViewById(R.id.starButton);
         convertButton = findViewById(R.id.convertButton);
-
-        // Audio player controls
         playPauseButton = findViewById(R.id.playPauseButton);
         currentTime = findViewById(R.id.currentTime);
         totalTime = findViewById(R.id.totalTime);
@@ -188,23 +168,17 @@ public class TextToSpeechActivity extends AppCompatActivity {
     }
 
     private void setupButtonListeners() {
-        // File button click listener
         fileButton.setOnClickListener(v -> {
-            // Xử lý sự kiện upload file
         });
-
-        // Copy button click listener
         copyButton.setOnClickListener(v -> {
             String text = textArea.getText().toString();
             if (!text.isEmpty()) {
                 android.content.ClipboardManager clipboard = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
                 android.content.ClipData clip = android.content.ClipData.newPlainText("Converted Text", text);
                 clipboard.setPrimaryClip(clip);
-                Toast.makeText(this, "Text copied to clipboard", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Văn bản đã được sao chép vào clipboard", Toast.LENGTH_SHORT).show();
             }
         });
-
-        // Star button click listener
         starButton.setOnClickListener(v -> {
             String text = textArea.getText().toString().trim();
             if (!text.isEmpty()) {
@@ -216,7 +190,7 @@ public class TextToSpeechActivity extends AppCompatActivity {
                     
                     textStorageRepository.insertText(new TextStorageItem(currentDate, text, true));
                     starButton.setImageResource(R.drawable.ic_baseline_star_solid);
-                    Toast.makeText(this, "Text saved to storage", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "Văn bản đã được lưu vào bộ nhớ", Toast.LENGTH_SHORT).show();
                 } else {
                     starButton.setImageResource(R.drawable.ic_baseline_star_regular);
                 }
@@ -225,7 +199,6 @@ public class TextToSpeechActivity extends AppCompatActivity {
             }
         });
 
-        // Convert button click listener
         convertButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -233,7 +206,6 @@ public class TextToSpeechActivity extends AppCompatActivity {
             }
         });
 
-        // Play/Pause button click listener
         playPauseButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -245,31 +217,26 @@ public class TextToSpeechActivity extends AppCompatActivity {
     private void convertTextToSpeech() {
         String text = textArea.getText().toString().trim();
         if (text.isEmpty()) {
-            Toast.makeText(this, "Please enter text to convert", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Vui lòng nhập văn bản để chuyển đổi", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        // Show loading message
-        Toast.makeText(this, "Converting text to speech...", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "Chuyển đổi văn bản thành giọng nói...", Toast.LENGTH_SHORT).show();
         
-        // Choose TTS service based on selected language
+        //language
         if (currentLanguage == LANGUAGE_ENGLISH) {
-            // Use ElevenLabs for English
             convertWithElevenLabs(text);
         } else {
-            // Use Viettel AI for Vietnamese
             convertWithViettelAi(text);
         }
     }
     
     private void convertWithElevenLabs(String text) {
-        // Create request body
         TextToSpeechRequest requestData = new TextToSpeechRequest(text, ELEVENLABS_MODEL_ID);
         String jsonBody = new Gson().toJson(requestData);
         RequestBody requestBody = RequestBody.create(
                 MediaType.parse("application/json"), jsonBody);
 
-        // Make API call
         Call<ResponseBody> call = elevenLabsApi.convertTextToSpeech(
                 ELEVENLABS_VOICE_ID, 
                 ELEVENLABS_OUTPUT_FORMAT, 
@@ -281,17 +248,17 @@ public class TextToSpeechActivity extends AppCompatActivity {
             public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
                 if (response.isSuccessful() && response.body() != null) {
                     try {
-                        // Save audio to a temporary file
+                        // save and play audio
                         saveAndPlayAudio(response.body().byteStream());
                     } catch (IOException e) {
                         e.printStackTrace();
                         Toast.makeText(TextToSpeechActivity.this, 
-                                "Error saving audio: " + e.getMessage(), 
+                                "Lỗi khi lưu audio: " + e.getMessage(),
                                 Toast.LENGTH_SHORT).show();
                     }
                 } else {
                     Toast.makeText(TextToSpeechActivity.this, 
-                            "Error: " + response.code() + " " + response.message(), 
+                            "Lỗi: " + response.code() + " " + response.message(),
                             Toast.LENGTH_SHORT).show();
                 }
             }
@@ -299,14 +266,13 @@ public class TextToSpeechActivity extends AppCompatActivity {
             @Override
             public void onFailure(Call<ResponseBody> call, Throwable t) {
                 Toast.makeText(TextToSpeechActivity.this, 
-                        "Network error: " + t.getMessage(), 
+                        "Lỗi mạng: " + t.getMessage(),
                         Toast.LENGTH_SHORT).show();
             }
         });
     }
     
     private void convertWithViettelAi(String text) {
-        // Create Viettel AI request body
         ViettelTtsRequest requestData = new ViettelTtsRequest(
                 text, 
                 VIETTEL_VOICE,
@@ -320,7 +286,6 @@ public class TextToSpeechActivity extends AppCompatActivity {
         RequestBody requestBody = RequestBody.create(
                 MediaType.parse("application/json"), jsonBody);
 
-        // Make API call
         Call<ResponseBody> call = viettelAiApi.convertTextToSpeech(requestBody);
 
         call.enqueue(new Callback<ResponseBody>() {
@@ -328,17 +293,17 @@ public class TextToSpeechActivity extends AppCompatActivity {
             public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
                 if (response.isSuccessful() && response.body() != null) {
                     try {
-                        // Save audio to a temporary file
+                        // save and play
                         saveAndPlayAudio(response.body().byteStream());
                     } catch (IOException e) {
                         e.printStackTrace();
                         Toast.makeText(TextToSpeechActivity.this, 
-                                "Error saving audio: " + e.getMessage(), 
+                                "Lỗi khi lưu audio: " + e.getMessage(),
                                 Toast.LENGTH_SHORT).show();
                     }
                 } else {
                     Toast.makeText(TextToSpeechActivity.this, 
-                            "Error: " + response.code() + " " + response.message(), 
+                            "Lỗi: " + response.code() + " " + response.message(),
                             Toast.LENGTH_SHORT).show();
                 }
             }
@@ -346,20 +311,18 @@ public class TextToSpeechActivity extends AppCompatActivity {
             @Override
             public void onFailure(Call<ResponseBody> call, Throwable t) {
                 Toast.makeText(TextToSpeechActivity.this, 
-                        "Network error: " + t.getMessage(), 
+                        "Lỗi mạng: " + t.getMessage(),
                         Toast.LENGTH_SHORT).show();
             }
         });
     }
 
     private void saveAndPlayAudio(InputStream inputStream) throws IOException {
-        // Clean up any existing audio
+        // clean
         releaseMediaPlayer();
 
-        // Create a temporary file to store the audio
         audioFile = File.createTempFile("tts_audio", ".mp3", getCacheDir());
-        
-        // Write the input stream to the file
+
         try (FileOutputStream fos = new FileOutputStream(audioFile)) {
             byte[] buffer = new byte[4096];
             int bytesRead;
@@ -369,7 +332,6 @@ public class TextToSpeechActivity extends AppCompatActivity {
             fos.flush();
         }
 
-        // Play the audio
         playAudio();
     }
 
@@ -378,8 +340,7 @@ public class TextToSpeechActivity extends AppCompatActivity {
             mediaPlayer = new MediaPlayer();
             mediaPlayer.setDataSource(audioFile.getPath());
             mediaPlayer.prepare();
-            
-            // Update total duration
+
             int duration = mediaPlayer.getDuration();
             totalTime.setText(formatTime(duration));
             
@@ -391,7 +352,7 @@ public class TextToSpeechActivity extends AppCompatActivity {
             isPlaying = true;
             playPauseButton.setImageResource(android.R.drawable.ic_media_pause);
             
-            // Update progress
+            // update progress
             updateProgressRunnable.run();
             
             // Set up completion listener
@@ -407,7 +368,7 @@ public class TextToSpeechActivity extends AppCompatActivity {
             
         } catch (IOException e) {
             e.printStackTrace();
-            Toast.makeText(this, "Error playing audio: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Lỗi khi phát audio: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -432,7 +393,6 @@ public class TextToSpeechActivity extends AppCompatActivity {
             mediaPlayer.pause();
             playPauseButton.setImageResource(android.R.drawable.ic_media_play);
         } else {
-            // Ensure we can play from any state
             if (mediaPlayer.getCurrentPosition() >= mediaPlayer.getDuration()) {
                 mediaPlayer.seekTo(0);
             }
@@ -455,7 +415,6 @@ public class TextToSpeechActivity extends AppCompatActivity {
 
             @Override
             public void onStartTrackingTouch(SeekBar seekBar) {
-                // Remove callbacks to prevent position conflicts
                 audioSeekBar.removeCallbacks(updateProgressRunnable);
             }
 

@@ -60,7 +60,7 @@ import android.media.AudioRecord;
 
 import java.io.RandomAccessFile;
 
-public class VoiceRecorderActivity extends AppCompatActivity {
+public class PhoneCallRecorderActivity extends AppCompatActivity {
 
     private static final String TAG = "VoiceRecorderActivity";
     private static final int PERMISSION_REQUEST_CODE = 1;
@@ -78,7 +78,7 @@ public class VoiceRecorderActivity extends AppCompatActivity {
     private static final int CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO;
     private static final int AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT;
     private static final int OVERLAY_PERMISSION_REQUEST_CODE = 1234;
-    private static final int SEGMENT_DURATION = 3000;
+    private static final int SEGMENT_DURATION = 4000;
 
     private MediaRecorder mediaRecorder;
     private boolean isRecording = false;
@@ -86,7 +86,6 @@ public class VoiceRecorderActivity extends AppCompatActivity {
     private ImageButton callButton;
     private EditText phoneNumberInput;
     private TextView statusText;
-    private TelephonyManager telephonyManager;
     private PhoneStateListener phoneStateListener;
     private boolean isCallInProgress = false;
     private ViettelAsrApi viettelAsrApi;
@@ -100,9 +99,6 @@ public class VoiceRecorderActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_voice_recorder);
-
-        // Initialize telephony manager
-        telephonyManager = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
 
         // Initialize recording directory
         recordingDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "CallRecordings");
@@ -134,7 +130,7 @@ public class VoiceRecorderActivity extends AppCompatActivity {
                         isCallInProgress = true;
                         startRecording();
                         // Start floating window service
-                        startService(new Intent(VoiceRecorderActivity.this, FloatingWindowService.class));
+                        startService(new Intent(PhoneCallRecorderActivity.this, FloatingWindowService.class));
                         break;
                     case TelephonyManager.CALL_STATE_IDLE:
                         // Call is finished
@@ -144,7 +140,7 @@ public class VoiceRecorderActivity extends AppCompatActivity {
                                 stopRecording();
                             }
                             // Stop floating window service
-                            stopService(new Intent(VoiceRecorderActivity.this, FloatingWindowService.class));
+                            stopService(new Intent(PhoneCallRecorderActivity.this, FloatingWindowService.class));
                         }
                         break;
                 }
@@ -277,7 +273,7 @@ public class VoiceRecorderActivity extends AppCompatActivity {
 
             // Khởi tạo AudioRecord
             audioRecord = new AudioRecord(MediaRecorder.AudioSource.VOICE_COMMUNICATION,
-                    SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT, minBufferSize);
+                    SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT, 8192);
 
             if (audioRecord.getState() != AudioRecord.STATE_INITIALIZED) {
                 throw new IllegalStateException("AudioRecord không thể khởi tạo!");
@@ -296,7 +292,6 @@ public class VoiceRecorderActivity extends AppCompatActivity {
             recordingThread = new Thread(() -> {
                 byte[] buffer = new byte[finalMinBufferSize];
                 DataOutputStream dos = null;
-
                 try {
                     dos = new DataOutputStream(new FileOutputStream(currentRecordingFile));
                     writeWavHeader(dos, CHANNEL_CONFIG == AudioFormat.CHANNEL_IN_MONO ? 1 : 2, SAMPLE_RATE);
@@ -313,7 +308,7 @@ public class VoiceRecorderActivity extends AppCompatActivity {
                             if (currentTime - recordingStartTime >= SEGMENT_DURATION) {
                                 // Đóng file hiện tại và cập nhật header
                                 finishCurrentSegment(dos);
-                                
+
                                 // Chuyển đổi đoạn vừa ghi
                                 final String completedFile = currentRecordingFile;
                                 convertAudioSegment(new File(completedFile));
@@ -344,7 +339,7 @@ public class VoiceRecorderActivity extends AppCompatActivity {
 
         } catch (Exception e) {
             Log.e(TAG, "Error starting recording", e);
-            Toast.makeText(this, "Lỗi khi bắt đầu ghi âm: " + e.getMessage(), 
+            Toast.makeText(this, "Lỗi khi bắt đầu ghi âm: " + e.getMessage(),
                     Toast.LENGTH_SHORT).show();
             stopRecording();
         }
@@ -409,6 +404,7 @@ public class VoiceRecorderActivity extends AppCompatActivity {
                     ViettelSpeechToTextResponse.TranscriptResult result = 
                             sttResponse.getResponse().getResult().get(0);
                     String transcript = result.getTranscript();
+                    Log.d("PhoneCallRecorderActivity", transcript);
                     
                     if (transcript != null && !transcript.trim().isEmpty()) {
                         handleTranscriptionResult(transcript);

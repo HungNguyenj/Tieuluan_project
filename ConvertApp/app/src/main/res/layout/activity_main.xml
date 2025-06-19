@@ -96,8 +96,9 @@
         app:strokeColor="#DDDDDD"
         app:strokeWidth="1dp" />
 
+
     <com.google.android.material.button.MaterialButton
-        android:id="@+id/phoneCallButton"
+        android:id="@+id/voiceRecorderButton"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginHorizontal="16dp"
@@ -112,25 +113,6 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/readBankTransactionButton"
-        app:strokeColor="#DDDDDD"
-        app:strokeWidth="1dp" />
-
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/voiceRecorderButton"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginHorizontal="16dp"
-        android:layout_marginTop="16dp"
-        android:padding="16dp"
-        android:text="Voice Recorder"
-        android:textColor="#000000"
-        android:textSize="18sp"
-        app:backgroundTint="#FFFFFF"
-        app:cornerRadius="20dp"
-        app:elevation="4dp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/phoneCallButton"
         app:strokeColor="#DDDDDD"
         app:strokeWidth="1dp" />
 

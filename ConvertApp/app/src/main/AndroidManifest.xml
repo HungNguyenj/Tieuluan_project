@@ -42,7 +42,7 @@
         android:theme="@style/Theme.ConvertApp"
         tools:targetApi="31">
         <activity
-            android:name=".activities.VoiceRecorderActivity"
+            android:name=".activities.PhoneCallRecorderActivity"
             android:exported="false" />
         <activity
             android:name=".activities.TransactionListActivity"
@@ -81,7 +81,6 @@
             android:name=".services.FloatingWindowService"
             android:enabled="true"
             android:exported="false" />
-        <service android:name=".services.CallRecordingService" />
     </application>
 
 </manifest>

@@ -13,6 +13,7 @@ import android.os.Looper;
 import android.provider.Settings;
 import android.util.Log;
 import android.widget.Toast;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
@@ -56,14 +57,14 @@ public class BankTransactionActivity extends AppCompatActivity {
             return insets;
         });
 
-        // Initialize UI components
+        //init
         initializeViews();
         setupRecyclerView();
         setupPermissionCheck();
         registerNotificationReceiver();
         
-        // Add some sample notifications for testing
-        addSampleNotifications();
+        // example
+//        addSampleNotifications();
         
         // Check permission immediately
         checkNotificationAccess();
@@ -78,7 +79,7 @@ public class BankTransactionActivity extends AppCompatActivity {
                 Intent intent = new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS");
                 startActivity(intent);
             } else {
-                // If permission is granted, try restarting the service
+                // check permission and restart
                 toggleNotificationListenerService();
             }
         });
@@ -115,14 +116,12 @@ public class BankTransactionActivity extends AppCompatActivity {
             updatePermissionStatus();
             
             if (isPermissionGranted) {
-                // Permission was just granted, restart the service
                 toggleNotificationListenerService();
             }
         }
     }
 
     private void toggleNotificationListenerService() {
-        Log.d(TAG, "Toggling NotificationListenerService");
         ComponentName thisComponent = new ComponentName(this, NotificationListenerService.class);
         PackageManager pm = getPackageManager();
         
@@ -134,7 +133,7 @@ public class BankTransactionActivity extends AppCompatActivity {
                 PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
                 PackageManager.DONT_KILL_APP);
         
-        Toast.makeText(this, "Restarting notification service...", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "Khởi động lại dịch vụ thông báo...", Toast.LENGTH_SHORT).show();
     }
 
     private void updatePermissionStatus() {
@@ -149,14 +148,16 @@ public class BankTransactionActivity extends AppCompatActivity {
 
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
     private void registerNotificationReceiver() {
+        Log.d(TAG, "Register notification receiver");
         notificationReceiver = new NotificationReceiver();
         IntentFilter filter = new IntentFilter();
         filter.addAction(ACTION_NOTIFICATION_LISTENER);
-        registerReceiver(notificationReceiver, filter);
+        
+        //register
+        LocalBroadcastManager.getInstance(this).registerReceiver(notificationReceiver, filter);
     }
 
     private void addSampleNotifications() {
-        // Add some sample notifications
         String[] sampleMessages = {
             "[12:30:45] Vietcombank - Thông báo: Tài khoản của bạn vừa nhận được 1,000,000 VND",
             "[12:35:20] MBBank - Biến động số dư: +500,000 VND từ nguồn NGUYEN VAN A",
@@ -173,7 +174,8 @@ public class BankTransactionActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         if (notificationReceiver != null) {
-            unregisterReceiver(notificationReceiver);
+            Log.d(TAG, "Unregistering notification receiver");
+            LocalBroadcastManager.getInstance(this).unregisterReceiver(notificationReceiver);
         }
         if (permissionCheckHandler != null) {
             permissionCheckHandler.removeCallbacksAndMessages(null);
@@ -184,11 +186,14 @@ public class BankTransactionActivity extends AppCompatActivity {
         @Override
         public void onReceive(Context context, Intent intent) {
             String message = intent.getStringExtra("message");
+            
             if (message != null && !message.isEmpty()) {
-                Log.d(TAG, "Received notification message: " + message);
                 TransactionMessage transaction = new TransactionMessage(message);
-                transactionAdapter.addTransaction(transaction);
-                transactionRecyclerView.smoothScrollToPosition(0);
+                runOnUiThread(() -> {
+                    //update to UI
+                    transactionAdapter.addTransaction(transaction);
+                    transactionRecyclerView.smoothScrollToPosition(0);
+                });
             }
         }
     }

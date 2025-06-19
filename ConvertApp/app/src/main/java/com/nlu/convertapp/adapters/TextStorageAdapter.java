@@ -136,7 +136,6 @@ public class TextStorageAdapter extends RecyclerView.Adapter<TextStorageAdapter.
                     convertAppDir.mkdirs();
                 }
 
-                // Create file name with timestamp
                 SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault());
                 String timestamp = sdf.format(new Date());
                 String fileName = "text_" + timestamp + ".txt";

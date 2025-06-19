@@ -39,13 +39,10 @@ import java.util.Locale;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.RandomAccessFile;
-import java.util.HashMap;
-import java.util.Map;
 
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
@@ -62,35 +59,36 @@ import com.google.gson.Gson;
 import java.util.concurrent.TimeUnit;
 import android.media.AudioFormat;
 import android.media.AudioRecord;
-import android.media.AudioTrack;
 import android.media.MediaMetadataRetriever;
 import android.Manifest;
 import android.content.pm.PackageManager;
 import android.media.MediaRecorder;
 import android.os.Build;
-import android.os.Environment;
 
 public class SpeechToTextActivity extends AppCompatActivity {
 
-    // ElevenLabs API constants
+    //elevenlabs
     private static final String ELEVENLABS_API_URL = "https://api.elevenlabs.io/";
     private static final String ELEVENLABS_API_KEY = ApiKeys.ELEVENLABS_API_KEY;
     private static final String ELEVENLABS_MODEL_ID = ApiKeys.ELEVENLABS_MODEL_ID;
     
-    // Viettel AI ASR constants
+    //viettel
     private static final String VIETTEL_API_URL = "https://viettelai.vn/";
     private static final String VIETTEL_TOKEN = ApiKeys.VIETTEL_TOKEN;
 
-    // Language constants
     private static final int LANGUAGE_ENGLISH = 0;
     private static final int LANGUAGE_VIETNAMESE = 1;
     private int currentLanguage = LANGUAGE_ENGLISH;
 
-    // Thêm hằng số cho phép kiểm tra định dạng file
     private static final String[] SUPPORTED_AUDIO_FORMATS = {
         "audio/wav", "audio/x-wav", "audio/mp3", "audio/mpeg"
     };
 
+    private Uri selectedAudioFileUri;
+    private ElevenLabsApi elevenLabsApi;
+    private ViettelAsrApi viettelAsrApi;
+
+    //UI
     private Toolbar toolbar;
     private Spinner languageSpinner;
     private ImageButton micButton;
@@ -99,19 +97,14 @@ public class SpeechToTextActivity extends AppCompatActivity {
     private TextView recognizedText;
     private ImageButton copyButton;
     private ImageButton starButton;
-    
-    private Uri selectedAudioFileUri;
-    private ElevenLabsApi elevenLabsApi;
-    private ViettelAsrApi viettelAsrApi;
 
-    // Recording constants
     private static final int PERMISSION_REQUEST_CODE = 1;
     private static final String[] REQUIRED_PERMISSIONS = {
         Manifest.permission.RECORD_AUDIO,
         Manifest.permission.WRITE_EXTERNAL_STORAGE
     };
     
-    // Recording variables
+    //record
     private static final int SAMPLE_RATE = 16000;
     private static final int CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO;
     private static final int AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT;
@@ -132,20 +125,19 @@ public class SpeechToTextActivity extends AppCompatActivity {
                         try {
                             selectedAudioFileUri = uri;
                             String fileName = getFileName(uri);
-                            // Change the button text to show the selected filename
                             addFileButton.setText(fileName);
                             addFileButton.setIcon(getResources().getDrawable(R.drawable.ic_baseline_file_upload_24, getTheme()));
-                            Toast.makeText(this, "File added successfully", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(this, "Thêm File thành công", Toast.LENGTH_SHORT).show();
                         } catch (Exception e) {
                             selectedAudioFileUri = null;
-                            Toast.makeText(this, "Error adding file: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                            Toast.makeText(this, "Lỗi khi thêm File: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                         }
                     } else {
-                        Toast.makeText(this, "Error: Could not get file data", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, "Lỗi: Không thể lấy được dữ liệu File", Toast.LENGTH_SHORT).show();
                     }
                 } else if (result.getResultCode() != Activity.RESULT_CANCELED) {
-                    // Only show error if it wasn't a user cancellation
-                    Toast.makeText(this, "Error selecting file", Toast.LENGTH_SHORT).show();
+                    // cancel select file
+                    Toast.makeText(this, "Lỗi khi chọn File", Toast.LENGTH_SHORT).show();
                 }
             });
 
@@ -154,7 +146,7 @@ public class SpeechToTextActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_speech_to_text);
         
-        // Initialize repository
+        //repository
         textStorageRepository = new TextStorageRepository(this);
         textStorageRepository.open();
         
@@ -172,6 +164,7 @@ public class SpeechToTextActivity extends AppCompatActivity {
     private void checkPermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             boolean allPermissionsGranted = true;
+            //check
             for (String permission : REQUIRED_PERMISSIONS) {
                 if (checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED) {
                     allPermissionsGranted = false;
@@ -196,13 +189,13 @@ public class SpeechToTextActivity extends AppCompatActivity {
                 }
             }
             if (!allPermissionsGranted) {
-                Toast.makeText(this, "Permissions are required for recording audio", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Cần có quyền để ghi âm", Toast.LENGTH_SHORT).show();
             }
         }
     }
 
     private void setupRetrofit() {
-        // Initialize ElevenLabs API
+        // elevenLabs API
         Retrofit elevenLabsRetrofit = new Retrofit.Builder()
                 .baseUrl(ELEVENLABS_API_URL)
                 .addConverterFactory(GsonConverterFactory.create())
@@ -210,7 +203,7 @@ public class SpeechToTextActivity extends AppCompatActivity {
         
         elevenLabsApi = elevenLabsRetrofit.create(ElevenLabsApi.class);
 
-        // Initialize Viettel ASR API
+        // viettel API
         OkHttpClient client = new OkHttpClient.Builder()
                 .connectTimeout(60, TimeUnit.SECONDS)
                 .readTimeout(60, TimeUnit.SECONDS)
@@ -227,7 +220,7 @@ public class SpeechToTextActivity extends AppCompatActivity {
         viettelAsrApi = viettelRetrofit.create(ViettelAsrApi.class);
     }
 
-    // Setup language spinner
+    // language spinner
     private void setupLanguageSpinner() {
         languageSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
@@ -237,33 +230,22 @@ public class SpeechToTextActivity extends AppCompatActivity {
 
             @Override
             public void onNothingSelected(AdapterView<?> parent) {
-                currentLanguage = LANGUAGE_ENGLISH; // Default to English
+                currentLanguage = LANGUAGE_ENGLISH;
             }
         });
     }
 
-    // Initialize views
     private void initializeViews() {
-        // Toolbar
         toolbar = findViewById(R.id.toolbar);
-        
-        // Language spinner
         languageSpinner = findViewById(R.id.languageSpinner);
-        
-        // Speech input controls
         micButton = findViewById(R.id.micButton);
-        
-        // Buttons
         addFileButton = findViewById(R.id.addFileButton);
         convertButton = findViewById(R.id.convertButton);
-        
-        // Text display and action buttons
         recognizedText = findViewById(R.id.recognizedText);
         copyButton = findViewById(R.id.copyButton);
         starButton = findViewById(R.id.starButton);
     }
 
-    // Setup button listeners
     private void setupButtonListeners() {
         micButton.setOnClickListener(v -> {
             if (isRecording) {
@@ -281,7 +263,7 @@ public class SpeechToTextActivity extends AppCompatActivity {
             if (selectedAudioFileUri != null) {
                 convertSpeechToText(selectedAudioFileUri);
             } else {
-                Toast.makeText(this, "Please select an audio file first", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Vui lòng chọn một tập tin âm thanh trước", Toast.LENGTH_SHORT).show();
             }
         });
 
@@ -294,23 +276,23 @@ public class SpeechToTextActivity extends AppCompatActivity {
             if (!text.isEmpty()) {
                 isStarred = !isStarred;
                 if (isStarred) {
-                    // Save to database
+                    // save to db
                     SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss", Locale.getDefault());
                     String currentDate = sdf.format(new Date());
                     
                     textStorageRepository.insertText(new TextStorageItem(currentDate, text, true));
                     starButton.setImageResource(R.drawable.ic_baseline_star_solid);
-                    Toast.makeText(this, "Text saved to storage", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "Văn bản đã được lưu vào bộ nhớ", Toast.LENGTH_SHORT).show();
                 } else {
                     starButton.setImageResource(R.drawable.ic_baseline_star_regular);
                 }
             } else {
-                Toast.makeText(this, "No text available to save", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Không có văn bản nào có sẵn", Toast.LENGTH_SHORT).show();
             }
         });
     }
 
-    // Open file picker
+    //file picker
     private void openFilePicker() {
         try {
             Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
@@ -319,57 +301,48 @@ public class SpeechToTextActivity extends AppCompatActivity {
             intent.putExtra(Intent.EXTRA_MIME_TYPES, SUPPORTED_AUDIO_FORMATS);
             filePickerLauncher.launch(intent);
         } catch (Exception e) {
-            Toast.makeText(this, "Error opening file picker: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Lỗi khi mở trình chọn tệp: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 
-    // Convert speech to text
+    // convert STT
     private void convertSpeechToText(Uri audioFileUri) {
         try {
-            // Kiểm tra mime type của file
+            //check type
             String mimeType = getContentResolver().getType(audioFileUri);
-            Log.d("ViettelASR", "File MIME type: " + mimeType);
-            
-            // Kiểm tra kích thước file trước khi xử lý
+
+            //check size
             long fileSize = getFileSizeFromUri(audioFileUri);
-            Log.d("ViettelASR", "Original file size: " + fileSize + " bytes");
-            
             if (fileSize <= 0) {
                 recognizedText.setText("Lỗi: Không thể đọc file hoặc file rỗng");
                 return;
             }
             
-            // Show loading state
+            //loading state
             recognizedText.setText("Đang xử lý file âm thanh...");
             convertButton.setEnabled(false);
 
-            // Tạo temporary file
             File audioFile = createTempFileFromUri(audioFileUri);
             
-            // Kiểm tra file tạm sau khi tạo
+            //check
             if (!audioFile.exists() || audioFile.length() == 0) {
                 recognizedText.setText("Lỗi: File tạm không hợp lệ");
                 return;
             }
-            
-            // Log thông tin file tạm
-            Log.d("ViettelASR", "Temp file created: " + audioFile.getAbsolutePath());
-            Log.d("ViettelASR", "Temp file size: " + audioFile.length() + " bytes");
-            
-            // Kiểm tra nội dung file có đọc được không
+
             try {
                 MediaMetadataRetriever retriever = new MediaMetadataRetriever();
                 retriever.setDataSource(audioFile.getAbsolutePath());
                 String duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
-                Log.d("ViettelASR", "Audio duration: " + duration + " ms");
+                Log.d("STT", "Audio duration: " + duration + " ms");
                 retriever.release();
             } catch (Exception e) {
-                Log.e("ViettelASR", "Error reading audio metadata", e);
+                Log.e("STT", "Error reading audio metadata", e);
                 recognizedText.setText("Lỗi: File âm thanh không hợp lệ");
                 return;
             }
             
-            // Chọn API phù hợp
+            //convert with language
             if (currentLanguage == LANGUAGE_ENGLISH) {
                 convertWithElevenLabs(audioFile);
             } else {
@@ -377,7 +350,7 @@ public class SpeechToTextActivity extends AppCompatActivity {
             }
             
         } catch (IOException e) {
-            Log.e("ViettelASR", "Error processing file", e);
+            Log.e("STT", "Error processing file", e);
             convertButton.setEnabled(true);
             recognizedText.setText("Lỗi xử lý file: " + e.getMessage());
         }
@@ -385,7 +358,6 @@ public class SpeechToTextActivity extends AppCompatActivity {
     
     // Convert using ElevenLabs
     private void convertWithElevenLabs(File audioFile) {
-        // Prepare multipart request
         RequestBody modelIdBody = RequestBody.create(MediaType.parse("text/plain"), ELEVENLABS_MODEL_ID);
         RequestBody fileBody = RequestBody.create(MediaType.parse("audio/*"), audioFile);
         MultipartBody.Part filePart = MultipartBody.Part.createFormData(
@@ -420,41 +392,33 @@ public class SpeechToTextActivity extends AppCompatActivity {
     
     // Convert using Viettel ASR
     private void convertWithViettelAsr(File audioFile) {
-        // Log thông tin file trước khi gửi
-        Log.d("ViettelASR", String.format("Sending file: %s (size: %d bytes)", 
-            audioFile.getName(), audioFile.length()));
-        
-        // Xác định MediaType dựa trên extension
+        //media type
         String contentType = "audio/wav"; // default
         if (audioFile.getName().toLowerCase().endsWith(".mp3")) {
             contentType = "audio/mpeg";
         }
         
-        // Tạo request body với content type phù hợp
+        //request body
         RequestBody fileBody = RequestBody.create(MediaType.parse(contentType), audioFile);
         MultipartBody.Part filePart = MultipartBody.Part.createFormData("file", 
             audioFile.getName(), fileBody);
         
-        // Tạo token part
+        //token part
         RequestBody tokenBody = RequestBody.create(MediaType.parse("text/plain"), VIETTEL_TOKEN);
-        
-        // Tạo OkHttpClient với timeout và logging
+
         OkHttpClient client = new OkHttpClient.Builder()
                 .connectTimeout(60, TimeUnit.SECONDS)
                 .readTimeout(60, TimeUnit.SECONDS)
                 .writeTimeout(60, TimeUnit.SECONDS)
                 .addInterceptor(chain -> {
                     Request original = chain.request();
-                    Log.d("ViettelASR", "Sending request to: " + original.url());
-                    Log.d("ViettelASR", "Request headers: " + original.headers());
                     return chain.proceed(original);
                 })
                 .addInterceptor(new HttpLoggingInterceptor(message -> 
-                    Log.d("ViettelASR", "OkHttp: " + message))
+                    Log.d("STT", "OkHttp: " + message))
                     .setLevel(HttpLoggingInterceptor.Level.BODY))
                 .build();
-        
-        // Tạo Retrofit instance
+
         Retrofit viettelRetrofit = new Retrofit.Builder()
                 .baseUrl(VIETTEL_API_URL)
                 .client(client)
@@ -462,42 +426,27 @@ public class SpeechToTextActivity extends AppCompatActivity {
                 .build();
         
         viettelAsrApi = viettelRetrofit.create(ViettelAsrApi.class);
-        
-        // Gửi request
+
         Call<ViettelSpeechToTextResponse> call = viettelAsrApi.convertSpeechToText(filePart, tokenBody);
         
         call.enqueue(new Callback<ViettelSpeechToTextResponse>() {
             @Override
             public void onResponse(Call<ViettelSpeechToTextResponse> call, Response<ViettelSpeechToTextResponse> response) {
                 convertButton.setEnabled(true);
-                
-                // Log chi tiết response
-                Log.d("ViettelASR", "HTTP Status Code: " + response.code());
-                if (response.body() != null) {
-                    Log.d("ViettelASR", "Full Response: " + new Gson().toJson(response.body()));
-                }
-                
+
                 if (response.isSuccessful()) {
                     ViettelSpeechToTextResponse viettelResponse = response.body();
                     if (viettelResponse != null) {
-                        // Log chi tiết từng trường
-                        Log.d("ViettelASR", "API Code: " + viettelResponse.getCode());
-                        Log.d("ViettelASR", "API Message: " + viettelResponse.getMessage());
-                        
                         if (viettelResponse.getResponse() != null && 
                             viettelResponse.getResponse().getResult() != null && 
                             !viettelResponse.getResponse().getResult().isEmpty()) {
                             
                             ViettelSpeechToTextResponse.TranscriptResult result = viettelResponse.getResponse().getResult().get(0);
+
                             String transcript = result.getTranscript();
                             double confidence = result.getConfidence();
-                            
-                            // Log kết quả
-                            Log.d("ViettelASR", "Transcript: " + transcript);
-                            Log.d("ViettelASR", "Confidence: " + confidence);
-                            
                             if (transcript != null && !transcript.isEmpty()) {
-                                // Hiển thị kết quả với độ tin cậy
+
                                 String displayText = transcript + "\n" +
                                                   "Độ tin cậy: " + String.format("%.2f%%", confidence * 100);
                                 recognizedText.setText(displayText);
@@ -528,12 +477,12 @@ public class SpeechToTextActivity extends AppCompatActivity {
             public void onFailure(Call<ViettelSpeechToTextResponse> call, Throwable t) {
                 convertButton.setEnabled(true);
                 Log.e("ViettelASR", "Network Error", t);
-                recognizedText.setText("Lỗi mạng: " + t.getMessage());
+                recognizedText.setText("Lỗi: " + t.getMessage());
             }
         });
     }
 
-    // Thêm phương thức lấy kích thước file
+    //get file size
     private long getFileSizeFromUri(Uri uri) {
         try {
             Cursor cursor = getContentResolver().query(uri, null, null, null, null);
@@ -545,7 +494,7 @@ public class SpeechToTextActivity extends AppCompatActivity {
                 return size;
             }
         } catch (Exception e) {
-            Log.e("ViettelASR", "Error getting file size", e);
+            Log.e("STT", "Error getting file size", e);
         }
         
         // Nếu không lấy được qua cursor, thử đọc trực tiếp
@@ -554,22 +503,20 @@ public class SpeechToTextActivity extends AppCompatActivity {
                 return inputStream.available();
             }
         } catch (IOException e) {
-            Log.e("ViettelASR", "Error reading file size from stream", e);
+            Log.e("STT", "Error reading file size from stream", e);
         }
         
         return -1;
     }
-
-    // Sửa lại phương thức tạo file tạm
+    
+    //create temp file
     private File createTempFileFromUri(Uri uri) throws IOException {
         String fileName = getFileName(uri);
         String extension = getFileExtension(fileName);
-        
-        // Tạo file tạm với extension gốc
+
         File tempFile = File.createTempFile("audio_", extension, getCacheDir());
-        Log.d("ViettelASR", "Creating temp file: " + tempFile.getAbsolutePath());
-        
-        // Đọc và ghi file với buffer lớn hơn
+        Log.d("STT", "Creating temp file: " + tempFile.getAbsolutePath());
+
         try (InputStream inputStream = getContentResolver().openInputStream(uri);
              FileOutputStream outputStream = new FileOutputStream(tempFile)) {
             
@@ -586,19 +533,15 @@ public class SpeechToTextActivity extends AppCompatActivity {
                 totalBytes += bytesRead;
                 Log.d("ViettelASR", "Bytes written: " + totalBytes);
             }
-            
             outputStream.flush();
-            
-            // Verify file was written correctly
+
             if (tempFile.length() != totalBytes) {
                 throw new IOException("File size mismatch. Expected: " + totalBytes + ", Actual: " + tempFile.length());
             }
-            
             return tempFile;
         }
     }
 
-    // Thêm phương thức lấy extension của file
     private String getFileExtension(String fileName) {
         int lastDot = fileName.lastIndexOf(".");
         if (lastDot != -1) {
@@ -629,14 +572,14 @@ public class SpeechToTextActivity extends AppCompatActivity {
         return result;
     }
 
+    //copy
     private void copyTextToClipboard(String text) {
         ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
         ClipData clip = ClipData.newPlainText("Recognized Text", text);
         clipboard.setPrimaryClip(clip);
-        Toast.makeText(this, "Text copied to clipboard", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "Văn bản đã được sao chép vào clipboard", Toast.LENGTH_SHORT).show();
     }
 
-    // Reset the file selection
     private void resetFileSelection() {
         selectedAudioFileUri = null;
         addFileButton.setText(R.string.add_file);
@@ -646,41 +589,37 @@ public class SpeechToTextActivity extends AppCompatActivity {
     @SuppressLint("MissingPermission")
     private void startRecording() {
         try {
-            // Create output directory if it doesn't exist
             File outputDir = new File(getExternalFilesDir(null), "AudioRecordings");
             if (!outputDir.exists()) {
                 outputDir.mkdirs();
             }
 
-            // Create output file
+            //output file
             String timestamp = new java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.getDefault())
                     .format(new java.util.Date());
             audioFilePath = new File(outputDir, "AUDIO_" + timestamp + ".wav").getAbsolutePath();
 
-            // Get min buffer size
             int minBufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT);
-
-            // Initialize AudioRecord
+            
             audioRecord = new AudioRecord(MediaRecorder.AudioSource.MIC,
                     SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT, minBufferSize);
 
-            // Start recording
+            //start recording
             audioRecord.startRecording();
             isRecording = true;
 
-            // Update UI
             micButton.setImageResource(R.drawable.ic_stop);
-            Toast.makeText(this, "Recording started", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Bắt đầu ghi âm", Toast.LENGTH_SHORT).show();
 
-            // Start recording thread
+            //start thread
             recordingThread = new Thread(() -> {
                 writeAudioDataToFile(minBufferSize);
             }, "AudioRecorder Thread");
             recordingThread.start();
 
         } catch (Exception e) {
-            Log.e("SpeechToText", "Error starting recording", e);
-            Toast.makeText(this, "Error starting recording: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            Log.e("STT", "Error starting recording", e);
+            Toast.makeText(this, "Lỗi khi bắt đầu ghi âm: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -689,8 +628,6 @@ public class SpeechToTextActivity extends AppCompatActivity {
         FileOutputStream os = null;
         try {
             os = new FileOutputStream(audioFilePath);
-            
-            // Write WAV header
             writeWavHeader(os, CHANNEL_CONFIG, SAMPLE_RATE, AUDIO_FORMAT);
 
             while (isRecording) {
@@ -700,17 +637,16 @@ public class SpeechToTextActivity extends AppCompatActivity {
                 }
             }
 
-            // Update WAV header with final file size
             updateWavHeader(audioFilePath);
 
         } catch (IOException e) {
-            Log.e("SpeechToText", "Error writing audio file", e);
+            Log.e("STT", "Error writing audio file", e);
         } finally {
             if (os != null) {
                 try {
                     os.close();
                 } catch (IOException e) {
-                    Log.e("SpeechToText", "Error closing output stream", e);
+                    Log.e("STT", "Error closing output stream", e);
                 }
             }
         }
@@ -722,9 +658,9 @@ public class SpeechToTextActivity extends AppCompatActivity {
         DataOutputStream data = new DataOutputStream(buffer);
 
         // RIFF header
-        data.writeBytes("RIFF"); // ChunkID
+        data.writeBytes("RIFF"); // ChunkID Resource Interchange File Format
         data.writeInt(0); // ChunkSize (will be updated later)
-        data.writeBytes("WAVE"); // Format
+        data.writeBytes("WAVE"); //format
         
         // fmt subchunk
         data.writeBytes("fmt "); // Subchunk1ID
@@ -759,7 +695,7 @@ public class SpeechToTextActivity extends AppCompatActivity {
             raf.writeInt(Integer.reverseBytes((int) dataSize));
             raf.close();
         } catch (IOException e) {
-            Log.e("SpeechToText", "Error updating WAV header", e);
+            Log.e("STT", "Error updating WAV header", e);
         }
     }
 
@@ -774,23 +710,22 @@ public class SpeechToTextActivity extends AppCompatActivity {
                     recordingThread = null;
                 }
 
-                // Stop and release AudioRecord
+                //stop and release audioRecord
                 audioRecord.stop();
                 audioRecord.release();
                 audioRecord = null;
 
-                // Update UI
                 micButton.setImageResource(R.drawable.ic_fa_microphone);
-                Toast.makeText(this, "Recording stopped", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Dừng ghi âm", Toast.LENGTH_SHORT).show();
 
-                // Convert the recorded file
+                //convert the record file
                 Uri audioUri = Uri.fromFile(new File(audioFilePath));
                 selectedAudioFileUri = audioUri;
                 convertSpeechToText(audioUri);
 
             } catch (Exception e) {
-                Log.e("SpeechToText", "Error stopping recording", e);
-                Toast.makeText(this, "Error stopping recording: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                Log.e("STT", "Error stopping recording", e);
+                Toast.makeText(this, "Lỗi khi dừng ghi âm: " + e.getMessage(), Toast.LENGTH_SHORT).show();
             }
         }
     }

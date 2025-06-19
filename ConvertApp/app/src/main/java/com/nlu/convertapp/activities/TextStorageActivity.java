@@ -24,7 +24,6 @@ import com.nlu.convertapp.models.TextStorageItem;
 import com.nlu.convertapp.repository.TextStorageRepository;
 
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -54,18 +53,15 @@ public class TextStorageActivity extends AppCompatActivity implements TextStorag
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         getSupportActionBar().setDisplayShowHomeEnabled(true);
 
-        // Initialize repository
+        //repository
         repository = new TextStorageRepository(this);
         repository.open();
-
-        // Initialize UI components
+        
         recyclerView = findViewById(R.id.recyclerView);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
-        
-        // Check and request permissions
+
         checkAndRequestPermissions();
-        
-        // Load data from database
+
         loadTextItems();
     }
 
@@ -86,36 +82,17 @@ public class TextStorageActivity extends AppCompatActivity implements TextStorag
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == STORAGE_PERMISSION_CODE) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(this, "Storage permission granted", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Đã cấp quyền lưu trữ", Toast.LENGTH_SHORT).show();
             } else {
-                Toast.makeText(this, "Storage permission denied. Some features may not work.", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "Quyền lưu trữ bị từ chối. Một số tính năng có thể không hoạt động.", Toast.LENGTH_LONG).show();
             }
         }
     }
 
     private void loadTextItems() {
         textItems = repository.getAllTexts();
-        if (textItems.isEmpty()) {
-            // If no data exists, add sample data
-            addSampleData();
-            textItems = repository.getAllTexts();
-        }
         adapter = new TextStorageAdapter(textItems, this);
         recyclerView.setAdapter(adapter);
-    }
-
-    private void addSampleData() {
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss", Locale.getDefault());
-        String currentDate = sdf.format(new Date());
-        
-        for (int i = 0; i < 5; i++) {
-            TextStorageItem item = new TextStorageItem(
-                currentDate,
-                "Sample text content " + (i + 1),
-                false
-            );
-            repository.insertText(item);
-        }
     }
 
     @Override
@@ -146,8 +123,7 @@ public class TextStorageActivity extends AppCompatActivity implements TextStorag
     @Override
     public void onDownloadClick(int position) {
         TextStorageItem item = textItems.get(position);
-        Toast.makeText(this, "Downloading content: " + item.getContent(), Toast.LENGTH_SHORT).show();
-        // Implement actual download functionality here
+        Toast.makeText(this, "Tải xuống nội dung: " + item.getContent(), Toast.LENGTH_SHORT).show();
     }
 
     @Override
@@ -162,23 +138,9 @@ public class TextStorageActivity extends AppCompatActivity implements TextStorag
                     // Remove from list and update UI
                     textItems.remove(position);
                     adapter.notifyItemRemoved(position);
-                    Toast.makeText(this, "Item deleted", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "Đã xóa item", Toast.LENGTH_SHORT).show();
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
-    }
-
-    public void addNewText(String content) {
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss", Locale.getDefault());
-        String currentDate = sdf.format(new Date());
-        
-        TextStorageItem newItem = new TextStorageItem(currentDate, content, false);
-        long id = repository.insertText(newItem);
-        
-        if (id != -1) {
-            textItems.add(0, newItem);
-            adapter.notifyItemInserted(0);
-            recyclerView.scrollToPosition(0);
-        }
     }
 }
